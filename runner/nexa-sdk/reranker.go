@@ -203,6 +203,12 @@ func NewReranker(input RerankerCreateInput) (*Reranker, error) {
 	return &Reranker{ptr: cHandle}, nil
 }
 
+// Reset resets the reranker state (for keepalive service)
+func (r *Reranker) Reset() error {
+	slog.Debug("Reset called", "ptr", r.ptr)
+	return nil
+}
+
 // Destroy destroys the reranker instance and frees associated resources
 func (r *Reranker) Destroy() error {
 	slog.Debug("Destroy called", "ptr", r.ptr)

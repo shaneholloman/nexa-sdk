@@ -168,8 +168,13 @@ func keepAliveGet[T any](name string, param types.ModelParam, reset bool) (any, 
 			PluginID:  manifest.PluginId,
 			DeviceID:  manifest.DeviceId,
 		})
-	//case reflect.TypeFor[nexa_sdk.Reranker]():
-	//	t, e = nexa_sdk.NewReranker(modelfile, nil, param.Device)
+	case reflect.TypeFor[nexa_sdk.Reranker]():
+		t, e = nexa_sdk.NewReranker(nexa_sdk.RerankerCreateInput{
+			ModelName: manifest.ModelName,
+			ModelPath: modelfile,
+			PluginID:  manifest.PluginId,
+			DeviceID:  manifest.DeviceId,
+		})
 	//case reflect.TypeFor[nexa_sdk.TTS]():
 	//	t, e = nexa_sdk.NewTTS(modelfile, nil, param.Device)
 	default:
