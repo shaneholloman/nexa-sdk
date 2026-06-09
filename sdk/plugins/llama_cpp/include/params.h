@@ -18,6 +18,8 @@ namespace geniex {
 // share the same upstream tuning.
 enum class Device { CPU, GPU, NPU };
 
+std::optional<std::vector<ggml_backend_dev_t>> resolve_devices(const char* device_id);
+
 // Reverse-classify a resolved device selection. Mirrors the alias table in
 // sdk/src/device.cpp:
 //   cpu    -> n_gpu_layers == 0                     -> CPU
@@ -40,17 +42,6 @@ llama_context_params build_context_params(const geniex_ModelConfig& config, int3
 // on the given target device. Returned struct is what ggml_threadpool_new
 // accepts.
 ggml_threadpool_params build_threadpool_params(int n_threads, Device device);
-
-// Map a caller's sampler config onto common_params_sampling, each unset (0/0.0)
-// field taking the plugin default. A null cfg yields pure defaults. Grammar
-// comes from grammar_string when set, otherwise it is read from grammar_path.
 common_params_sampling build_sampling_params(const geniex_SamplerConfig* cfg);
-
-// Parse a comma-separated device-id list (e.g. "HTP0,HTP1"), resolving each name against the
-// ggml registry. Returns the resolved devices followed by a trailing nullptr, suitable for
-// llama_model_params::devices via .data(); keep the result alive until model load returns.
-// A null/empty device_id yields an empty vector (caller uses the model default). Returns
-// std::nullopt only when device_id names devices but none of them resolve.
-std::optional<std::vector<ggml_backend_dev_t>> resolve_devices(const char* device_id);
 
 }  // namespace geniex
