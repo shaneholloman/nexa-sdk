@@ -71,37 +71,64 @@ def platform_for(device: str) -> str:
     raise SystemExit(f"unknown device chipset: {device}")
 
 
-def resolve_bundle_url(aihub_id: str, device: str) -> str | None:
+def _aihub_chipset_supported(aihub_id: str, device: str) -> bool:
+    """Probe AI Hub's release manifest to confirm `aihub_id` advertises an
+    asset for `device`'s chipset slug. Cheap (single JSON over HTTPS) and
+    keeps us from emitting a row that the device-side mm pull would just
+    error on, which is the only behaviour the host can know up front."""
     slug = CHIPSET.get(device)
     if slug is None:
         raise SystemExit(f"no chipset slug for {device}")
     url = f"{AIHUB_BASE}/models/{aihub_id}/releases/{AIHUB_VERSION}/release-assets.json"
     with urllib.request.urlopen(url) as r:
         assets = json.load(r).get("assets", [])
-    return next((a["download_url"] for a in assets if a.get("chipset") == slug), None)
+    return any(a.get("chipset") == slug for a in assets)
 
 
-def resolve_model_url(m: dict, device: str) -> tuple[str | None, str]:
-    """Return (download_url, kind) for a model entry; url is None when no
-    asset matches the device (QAIRT bundles only)."""
+def resolve_model_url(m: dict, device: str) -> str | None:
+    """Best-effort public download URL for the scorecard `Build & models`
+    block. None when no asset matches (QAIRT bundles on unsupported chipsets).
+    Not used for the actual download — the device-side mm pull does that."""
     if "aihub_id" in m:
-        return resolve_bundle_url(m["aihub_id"], device), "bundle"
-    return m["url"], "gguf"
+        slug = CHIPSET.get(device)
+        if slug is None:
+            return None
+        url = f"{AIHUB_BASE}/models/{m['aihub_id']}/releases/{AIHUB_VERSION}/release-assets.json"
+        with urllib.request.urlopen(url) as r:
+            assets = json.load(r).get("assets", [])
+        return next(
+            (a["download_url"] for a in assets if a.get("chipset") == slug), None
+        )
+    return m.get("url")
 
 
 def model_rows(models: list[dict], device: str) -> list[str]:
+    """One pipe-delimited row per model, consumed by the device-side run
+    scripts. Schema:
+
+        name | plugin | csv_devices | model_id | vlm | image
+
+    The host passes the chipset slug as a single shared --chipset flag to
+    geniex-bench; the model-manager hub auto-routes "qualcomm/*" to
+    AI Hub and everything else to HuggingFace, so per-row hub overrides
+    aren't needed. mmproj/tokenizer paths come back from get_paths.
+
+    Rows for AI Hub models whose chipset isn't advertised are dropped
+    upfront so the device doesn't waste time on a guaranteed-fail pull."""
     rows = []
     for m in models:
-        url, kind = resolve_model_url(m, device)
-        if url is None:
+        if "model_id" not in m:
+            raise SystemExit(f"{m['name']}: missing model_id in scorecard-models.json")
+        if m.get("hub") == "aihub" and not _aihub_chipset_supported(
+            m["aihub_id"], device
+        ):
             log.warning("no %s asset for %s, skipping", device, m["name"])
             continue
-        mmproj = m.get("mmproj_url", "")
         vlm = "1" if m.get("vlm") else ""
         image = "1" if m.get("image") else ""
         rows.append(
-            f"{m['name']}|{m['plugin']}|{','.join(m['devices'])}|{url}|{kind}"
-            f"|{mmproj}|{vlm}|{image}"
+            f"{m['name']}|{m['plugin']}|{','.join(m['devices'])}|{m['model_id']}"
+            f"|{vlm}|{image}"
         )
     return rows
 
@@ -116,6 +143,7 @@ def build_linux_artifact(
         (HERE / "linux" / "run_linux.sh")
         .read_text()
         .replace("{MODELS}", "\n".join(model_rows(models, device)))
+        .replace("{CHIPSET}", CHIPSET.get(device, ""))
     )
     script_path = stage / "run_linux.sh"
     script_path.write_text(script, newline="\n")
@@ -137,6 +165,7 @@ def build_windows_artifact(
         (HERE / "windows" / "run_windows.ps1")
         .read_text()
         .replace("{MODELS}", "\n".join(model_rows(models, device)))
+        .replace("{CHIPSET}", CHIPSET.get(device, ""))
     )
     (stage / "run_windows.ps1").write_text(script, newline="\r\n")
 
@@ -170,6 +199,7 @@ def build_android_artifact(
     )
     shutil.copy(omp, stage / "pkg-geniex" / "lib" / "llama_cpp" / "libomp.so")
     (stage / "matrix_rows.txt").write_text("\n".join(model_rows(models, device)))
+    (stage / "chipset.txt").write_text(CHIPSET.get(device, ""))
     shutil.copytree(HERE / "tests", stage / "tests")
     shutil.copy(HERE / "tests" / "requirements.txt", stage / "requirements.txt")
     shutil.copy(TEST_IMAGE, stage / "test.png")
@@ -252,8 +282,8 @@ def _pick_field(cells: list[dict], key: str) -> str | None:
 def _models_block(models: list[dict], device: str) -> list[str]:
     lines = ["**Models**", ""]
     for m in models:
-        url, _ = resolve_model_url(m, device)
-        lines.append(f"- {m['name']}: {url or '-'}")
+        url = resolve_model_url(m, device)
+        lines.append(f"- {m['name']} ({m['model_id']}): {url or '-'}")
     return lines
 
 

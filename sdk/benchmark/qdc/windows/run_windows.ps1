@@ -2,7 +2,14 @@
 #
 # QDC extracts the artifact zip to C:\Temp\TestContent\ and runs this via
 # PowerShell. Anything under C:\Temp\QDC_Logs\ is auto-uploaded. run_qdc_jobs.py
-# fills the here-string below with `name|plugin|csv_devices|url|kind` lines.
+# substitutes:
+#   {MODELS}  → `name|plugin|csv_devices|model_id|vlm|image` lines
+#   {CHIPSET} → AI Hub chipset slug (e.g. qualcomm-snapdragon-x-elite)
+# Each cell's column-4 model_id is resolved on the device by the model-
+# manager C API (multi-connection HTTPS, byte-range resume) on first
+# reference; the cached copy is reused across the ctx sweep — replacing
+# the Invoke-WebRequest loop the previous script ran (which OOMed on
+# >~7 GB GGUFs on X2 Elite).
 #
 # We sweep ctx in {512, 1024, 4096} per cell to align with test-llama.cpp's
 # PERFORMANCE SESSION; each ctx gets its own pre-trimmed prompt file.
@@ -11,12 +18,12 @@ $ErrorActionPreference = "Continue"
 
 $LOG = "C:\Temp\QDC_Logs"
 $OUT = "$LOG\results"
-$MODELS = "C:\Temp\models"
+$MM_CACHE = "C:\Temp\geniex-cache"
 $TC = "C:\Temp\TestContent"
 $BUNDLE = "$TC\pkg-geniex"
 $PROMPTS = "$TC\prompts"
 
-New-Item -ItemType Directory -Force -Path $LOG, $OUT, $MODELS | Out-Null
+New-Item -ItemType Directory -Force -Path $LOG, $OUT, $MM_CACHE | Out-Null
 Start-Transcript -Path "$LOG\script.log" -Force | Out-Null
 
 # Trust the self-signed cert the HTP .cat catalogs are signed with, or the
@@ -45,62 +52,15 @@ foreach ($ctx in $ctxList) {
 }
 
 foreach ($row in $rows) {
-    $name, $plugin, $devs, $url, $kind, $mmproj_url, $vlm, $image = $row -split '\|'
-    $dir = "$MODELS\$name"
-    New-Item -ItemType Directory -Force -Path $dir | Out-Null
-    Write-Output "=== fetch $name ($kind) ==="
-    if ($kind -eq "bundle") {
-        $mpath = "$dir\bundle"
-        if (-not (Test-Path $mpath)) {
-            try {
-                # IWR buffers the whole response in memory and explodes on
-                # multi-GB downloads; curl.exe streams to disk.
-                & curl.exe -fSL --retry 3 --retry-delay 5 -o "$dir\b.zip" "$url"
-                if ($LASTEXITCODE -ne 0) { throw "curl exit $LASTEXITCODE" }
-                Expand-Archive -Path "$dir\b.zip" -DestinationPath $mpath -Force
-                $entries = Get-ChildItem $mpath
-                if ($entries.Count -eq 1 -and $entries[0].PSIsContainer) {
-                    Move-Item "$($entries[0].FullName)\*" $mpath
-                    Remove-Item $entries[0].FullName
-                }
-            } catch {
-                Write-Output "WARNING: $name fetch failed, skipping"
-                Remove-Item $mpath -Recurse -ErrorAction SilentlyContinue
-                continue
-            }
-        }
-    } else {
-        $mpath = "$dir\model.gguf"
-        if (-not (Test-Path $mpath)) {
-            try {
-                & curl.exe -fSL --retry 3 --retry-delay 5 -o $mpath "$url"
-                if ($LASTEXITCODE -ne 0) { throw "curl exit $LASTEXITCODE" }
-            } catch {
-                Write-Output "WARNING: $name fetch failed, skipping"
-                continue
-            }
-        }
-    }
-    $mmpathfwd = ""
-    if ($mmproj_url) {
-        $mmpath = "$dir\mmproj.gguf"
-        if (-not (Test-Path $mmpath)) {
-            try {
-                & curl.exe -fSL --retry 3 --retry-delay 5 -o $mmpath "$mmproj_url"
-                if ($LASTEXITCODE -ne 0) { throw "curl exit $LASTEXITCODE" }
-            } catch {
-                Write-Output "WARNING: $name mmproj fetch failed, skipping"
-                continue
-            }
-        }
-        $mmpathfwd = $mmpath -replace '\\', '/'
-    }
+    $name, $plugin, $devs, $model_id, $vlm, $image = $row -split '\|'
+    Write-Output "=== plan $name id=$model_id ==="
     $imgpath = if ($image -eq "1") { $IMG } else { "" }
-    $mpathfwd = $mpath -replace '\\', '/'
     foreach ($d in $devs -split ',') {
         foreach ($ctx in $ctxList) {
-            "{0}-{1}-{2}-c{3}`t{1}`t{2}`t{4}`t`t{5}`t{6}`t{7}" -f `
-                $name, $plugin, $d, $ctx, $mpathfwd, $mmpathfwd, $imgpath, $vlm `
+            # Columns 5/6 (tokenizer/mmproj) intentionally blank: the model
+            # manager fills both from the resolved manifest.
+            "{0}-{1}-{2}-c{3}`t{1}`t{2}`t{4}`t`t`t{5}`t{6}" -f `
+                $name, $plugin, $d, $ctx, $model_id, $imgpath, $vlm `
                 | Add-Content $tsvByCtx[$ctx]
         }
     }
@@ -112,7 +72,8 @@ foreach ($ctx in $ctxList) {
     Write-Output "=== matrix ctx=$ctx ==="
     if (Test-Path $tsv) { Get-Content $tsv }
     & "$BUNDLE\bin\geniex-bench.exe" --matrix-file $tsv --output-json-dir "$OUT" -r 3 `
-        -c $ctx --prompt-file $prompt --reset-between-runs
+        -c $ctx --prompt-file $prompt --reset-between-runs `
+        --mm-data-dir $MM_CACHE --chipset "{CHIPSET}"
     Write-Output "rc=$LASTEXITCODE  ($((Get-ChildItem $OUT).Count) cell json files so far)"
 }
 Write-Output "=== done ==="

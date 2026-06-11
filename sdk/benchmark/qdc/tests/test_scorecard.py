@@ -14,27 +14,27 @@
 
 """On-device geniex-bench scorecard run for QDC Android phones.
 
-The host (this pytest process) fetches each model, adb-pushes it, builds the
-matrix.tsv, then runs geniex-bench on-device. The per-cell JSON is written
-straight to the device's QDC_logs/results, which QDC auto-collects — keeping
-run_qdc_jobs.py's download_cells path identical to Linux.
+The host (this pytest process) builds the matrix.tsv with model-manager ids
+in column 4 and runs geniex-bench on-device; the benchmark resolves each id
+via the model-manager C API and downloads to GENIEX_DATADIR on first use,
+replacing the host-side urllib + on-device curl that earlier revisions used.
+The per-cell JSON is written straight to the device's QDC_logs/results,
+which QDC auto-collects — keeping run_qdc_jobs.py's download_cells path
+identical to Linux.
 """
 
 import os
-import shutil
 import subprocess
-import tempfile
-import urllib.request
-import zipfile
 from pathlib import Path
 
 from utils import (
     BUNDLE_PATH,
+    HOST_CHIPSET,
     HOST_IMAGE,
     HOST_PROMPTS,
     HOST_ROWS,
     IMAGE_PATH,
-    MODELS_PATH,
+    MM_CACHE_PATH,
     PROMPTS_PATH,
     RESULTS_PATH,
     push_bundle_if_needed,
@@ -44,78 +44,29 @@ from utils import (
 CTXS = (512, 1024, 4096)
 
 
-def _flatten_single_dir(d: Path) -> None:
-    entries = list(d.iterdir())
-    if len(entries) == 1 and entries[0].is_dir():
-        inner = entries[0]
-        for child in inner.iterdir():
-            shutil.move(str(child), str(d / child.name))
-        inner.rmdir()
-
-
-def _fetch_and_push(
-    host_tmp: Path, name: str, url: str, kind: str, mmproj_url: str
-) -> tuple[str, str] | None:
-    """Download a model (+ optional mmproj) on the host, push it to the device.
-
-    Returns (model_path, mmproj_path) device paths; mmproj_path is "" when absent.
-    """
-    dev_dir = f"{MODELS_PATH}/{name}"
-    run_adb_command(f"mkdir -p {dev_dir}")
-    try:
-        if kind == "bundle":
-            local_zip = host_tmp / f"{name}.zip"
-            urllib.request.urlretrieve(url, local_zip)
-            local_dir = host_tmp / name
-            with zipfile.ZipFile(local_zip) as z:
-                z.extractall(local_dir)
-            _flatten_single_dir(local_dir)
-            subprocess.run(
-                ["adb", "push", str(local_dir), f"{dev_dir}/bundle"], check=True
-            )
-            return f"{dev_dir}/bundle", ""
-        # The phone has fast direct internet (and curl); the QDC Appium host
-        # does not reach HuggingFace reliably, so fetch gguf on-device.
-        dev_gguf = f"{dev_dir}/model.gguf"
-        run_adb_command(f"curl -L -fS --retry 3 --retry-delay 5 -o {dev_gguf} '{url}'")
-        dev_mmproj = ""
-        if mmproj_url:
-            dev_mmproj = f"{dev_dir}/mmproj.gguf"
-            run_adb_command(
-                f"curl -L -fS --retry 3 --retry-delay 5 -o {dev_mmproj} '{mmproj_url}'"
-            )
-        return dev_gguf, dev_mmproj
-    except Exception as e:  # noqa: BLE001 — one bad model must not abort the matrix
-        print(f"WARNING: {name} fetch/push failed, skipping: {e}")
-        return None
-
-
 def test_scorecard():
     push_bundle_if_needed()
-    run_adb_command(f"mkdir -p {MODELS_PATH} {RESULTS_PATH} {PROMPTS_PATH}")
+    run_adb_command(f"mkdir -p {MM_CACHE_PATH} {RESULTS_PATH} {PROMPTS_PATH}")
 
     subprocess.run(["adb", "push", HOST_IMAGE, IMAGE_PATH], check=True)
     subprocess.run(["adb", "push", f"{HOST_PROMPTS}/.", PROMPTS_PATH], check=True)
 
+    chipset = Path(HOST_CHIPSET).read_text().strip()
     rows = [r for r in Path(HOST_ROWS).read_text().splitlines() if r.strip()]
     tsv_by_ctx: dict[int, list[str]] = {ctx: [] for ctx in CTXS}
-    with tempfile.TemporaryDirectory() as td:
-        host_tmp = Path(td)
-        for row in rows:
-            name, plugin, devs, url, kind, mmproj_url, vlm, image = row.split("|")
-            pushed = _fetch_and_push(host_tmp, name, url, kind, mmproj_url)
-            if pushed is None:
-                continue
-            mpath, mmpath = pushed
-            imgpath = IMAGE_PATH if image == "1" else ""
-            for d in devs.split(","):
-                for ctx in CTXS:
-                    tsv_by_ctx[ctx].append(
-                        f"{name}-{plugin}-{d}-c{ctx}\t{plugin}\t{d}\t{mpath}"
-                        f"\t\t{mmpath}\t{imgpath}\t{vlm}"
-                    )
+    for row in rows:
+        name, plugin, devs, model_id, vlm, image = row.split("|")
+        imgpath = IMAGE_PATH if image == "1" else ""
+        for d in devs.split(","):
+            for ctx in CTXS:
+                # Columns 5/6 (tokenizer/mmproj) intentionally blank: the
+                # model manager fills both from the resolved manifest.
+                tsv_by_ctx[ctx].append(
+                    f"{name}-{plugin}-{d}-c{ctx}\t{plugin}\t{d}\t{model_id}"
+                    f"\t\t\t{imgpath}\t{vlm}"
+                )
 
-    assert any(tsv_by_ctx.values()), "no models pushed to device"
+    assert any(tsv_by_ctx.values()), "no model rows produced"
 
     lib = f"{BUNDLE_PATH}/lib"
     env = (
@@ -135,7 +86,8 @@ def test_scorecard():
         res = run_adb_command(
             f"cd {BUNDLE_PATH} && {env} ./bin/geniex-bench "
             f"--matrix-file {tsv_path} --output-json-dir {RESULTS_PATH} -r 3 "
-            f"-c {ctx} --prompt-file {prompt} --reset-between-runs",
+            f"-c {ctx} --prompt-file {prompt} --reset-between-runs "
+            f"--mm-data-dir {MM_CACHE_PATH} --chipset '{chipset}'",
             check=False,
         )
         if res.returncode != 0:
