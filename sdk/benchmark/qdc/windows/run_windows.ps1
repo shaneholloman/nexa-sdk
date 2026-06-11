@@ -53,7 +53,10 @@ foreach ($row in $rows) {
         $mpath = "$dir\bundle"
         if (-not (Test-Path $mpath)) {
             try {
-                Invoke-WebRequest -Uri $url -OutFile "$dir\b.zip"
+                # IWR buffers the whole response in memory and explodes on
+                # multi-GB downloads; curl.exe streams to disk.
+                & curl.exe -fSL --retry 3 --retry-delay 5 -o "$dir\b.zip" "$url"
+                if ($LASTEXITCODE -ne 0) { throw "curl exit $LASTEXITCODE" }
                 Expand-Archive -Path "$dir\b.zip" -DestinationPath $mpath -Force
                 $entries = Get-ChildItem $mpath
                 if ($entries.Count -eq 1 -and $entries[0].PSIsContainer) {
@@ -70,7 +73,8 @@ foreach ($row in $rows) {
         $mpath = "$dir\model.gguf"
         if (-not (Test-Path $mpath)) {
             try {
-                Invoke-WebRequest -Uri $url -OutFile $mpath
+                & curl.exe -fSL --retry 3 --retry-delay 5 -o $mpath "$url"
+                if ($LASTEXITCODE -ne 0) { throw "curl exit $LASTEXITCODE" }
             } catch {
                 Write-Output "WARNING: $name fetch failed, skipping"
                 continue
@@ -82,7 +86,8 @@ foreach ($row in $rows) {
         $mmpath = "$dir\mmproj.gguf"
         if (-not (Test-Path $mmpath)) {
             try {
-                Invoke-WebRequest -Uri $mmproj_url -OutFile $mmpath
+                & curl.exe -fSL --retry 3 --retry-delay 5 -o $mmpath "$mmproj_url"
+                if ($LASTEXITCODE -ne 0) { throw "curl exit $LASTEXITCODE" }
             } catch {
                 Write-Output "WARNING: $name mmproj fetch failed, skipping"
                 continue
