@@ -12,7 +12,7 @@
  *
  * Defaults:
  *   - fixed default prompt, n_gen=128, temperature=0.0, seed=42
- *   - 1 warmup + 3 measured runs (configurable)
+ *   - 1 warmup + 5 measured runs (configurable)
  *   - llama_cpp prompts get a [warmup=i] / [run=i] suffix to bust KV cache
  *     between runs
  *   - per-cell aggregation: median / min / max / mean / stdev for ttft_ms,
@@ -142,7 +142,7 @@ static void usage(const char* argv0) {
         "                      lines starting with '#' are ignored\n"
         "\n"
         "Optional (llama-bench-style names):\n"
-        "  -r, --repetitions N    default 3 (measured runs)\n"
+        "  -r, --repetitions N    default 5 (measured runs)\n"
         "  -n, --n-gen N          tokens to generate per run; default 128\n"
         "  -c, --ctx-size N       model n_ctx (0 = from model, default 0)\n"
         "  -t, --threads N        generation threads (0 = SDK default)\n"
@@ -327,7 +327,7 @@ static void parse_args(int argc, char** argv, options_t* o) {
     o->temperature        = 0.0f;
     o->seed               = 42;
     o->warmup             = 1;
-    o->repeat             = 3;
+    o->repeat             = 5;
     o->prompt             = DEFAULT_PROMPT;
     o->prompt_buf         = NULL;
     o->prompt_as_is       = false;

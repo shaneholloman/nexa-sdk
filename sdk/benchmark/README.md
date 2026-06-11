@@ -126,7 +126,7 @@ Run `geniex-bench --help` for the full flag list.
 ## Defaults
 
 - `n_gen=128`, `temperature=0.0`, `seed=42`
-- `--warmup 1`, `-r 3` (3 measured runs after 1 warmup; pass `--no-warmup`
+- `--warmup 1`, `-r 5` (5 measured runs after 1 warmup; pass `--no-warmup`
   to skip warmup)
 - llama_cpp gets a `[warmup=i]` / `[run=i]` suffix appended to the prompt
   so the KV cache is busted between runs
