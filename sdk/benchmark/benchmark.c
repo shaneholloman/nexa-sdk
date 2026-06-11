@@ -18,13 +18,16 @@
  *   - per-cell aggregation: median / min / max / mean / stdev for ttft_ms,
  *     prefill_tps, decode_tps; median-only for token counts
  *
- * The binary takes raw filesystem paths to a model + tokenizer + (optional)
- * mmproj. Resolving HuggingFace / AI Hub aliases is done by the Python CLI
- * (`geniex-py pull ...`) before this binary is invoked; the C side does
- * not depend on the model-manager surface.
+ * The binary accepts either a raw filesystem path or a model-manager id
+ * (e.g. `org/repo[:quant]` or `qualcomm/<aihub_repo>`) for the model
+ * argument. When it isn't a filesystem path, the model-manager API is
+ * used to download (resume-capable, multi-connection) and resolve the
+ * model + mmproj + tokenizer paths, replacing the curl/IWR shell loops
+ * the QDC scorecard used to run on each device.
  */
 
 #include <geniex.h>
+#include <geniex_model.h>
 #include <math.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -60,9 +63,20 @@ typedef struct {
     const char* plugin;
     const char* device;
     const char* device_id;
+    /* model_path is either an absolute filesystem path (treated as a local
+     * model directory or .gguf file) or a model-manager id of the form
+     * `org/repo[:quant]`. The model-id branch resolves via geniex_model_*
+     * (pulling if missing) and the resulting paths are written back into
+     * `mm_model_path` / `mm_mmproj` / `mm_tokenizer`, which then shadow
+     * model_path / mmproj_path / tokenizer_path for the rest of the cell. */
     const char* model_path;
     const char* tokenizer_path;
     const char* mmproj_path;
+    /* Heap-owned copies populated when the model is resolved through the
+     * model manager; freed at the end of run_one_cell. */
+    char*       mm_model_path;
+    char*       mm_mmproj;
+    char*       mm_tokenizer;
     bool        force_vlm; /* run VLM path even without an mmproj (QAIRT bundles) */
     const char* image_paths[MAX_PATHS];
     int32_t     image_count;
@@ -89,7 +103,18 @@ typedef struct {
     /* Matrix mode: one process, one geniex_init, many cells */
     const char* matrix_file;
     const char* output_json_dir;
+
+    /* Model-manager options. Apply to every cell whose `model_path` looks
+     * like a model id rather than a filesystem path. */
+    const char* mm_data_dir; /* cache root; NULL falls back to GENIEX_DATADIR / ~/.cache/geniex */
+    const char* mm_chipset;  /* AI Hub chipset slug (e.g. "qualcomm-snapdragon-x-elite") */
+    const char* mm_hub;      /* "auto" | "hf" | "aihub" | "modelscope" | "volces" — default auto */
 } options_t;
+
+/* Process-wide guard: geniex_model_init is one-shot per process (a second
+ * call returns INVALID_INPUT). matrix mode copies options_t per cell so
+ * the flag must live outside the struct. */
+static bool g_mm_inited = false;
 
 typedef struct {
     int32_t     run_idx;
@@ -131,12 +156,21 @@ static void usage(const char* argv0) {
         "Required (single-cell mode):\n"
         "  --plugin            llama_cpp | qairt\n"
         "  --device            cpu | gpu | npu | hybrid | auto (default auto)\n"
-        "  -m, --model PATH    path to .gguf or qairt bundle dir\n"
+        "  -m, --model VALUE   either a filesystem path (.gguf or bundle dir) or\n"
+        "                      a model-manager id `org/repo[:quant]`. The id form\n"
+        "                      pulls via geniex_model_pull on first use and reuses\n"
+        "                      the cached copy thereafter. mmproj/tokenizer paths\n"
+        "                      come from the manager so --mmproj-path is ignored\n"
+        "                      when an id is given.\n"
         "\n"
         "Required (matrix mode):\n"
         "  --matrix-file PATH  one cell per line, tab-separated:\n"
-        "                      cell_id<TAB>plugin<TAB>device<TAB>model_path"
+        "                      cell_id<TAB>plugin<TAB>device<TAB>model_path_or_id"
         "[<TAB>tokenizer_path][<TAB>mmproj_path][<TAB>image_paths][<TAB>vlm]\n"
+        "                      column 4 is a model-manager id when it doesn't look\n"
+        "                      like a path (no leading '/' / drive prefix and at\n"
+        "                      least one '/'); otherwise it's used verbatim as a\n"
+        "                      filesystem path.\n"
         "                      image_paths is comma-separated; vlm non-empty forces\n"
         "                      VLM mode (QAIRT bundles without an mmproj)\n"
         "                      lines starting with '#' are ignored\n"
@@ -178,9 +212,140 @@ static void usage(const char* argv0) {
         "  --output-md PATH       (single-cell) write per-cell Markdown row\n"
         "  --output-json-dir DIR  (matrix) write <DIR>/<cell_id>.json per cell\n"
         "  --cell-id ID           (single-cell) cell label used in reports\n"
+        "\n"
+        "Optional (model manager — applied when -m / matrix col 4 is a model id):\n"
+        "  --mm-data-dir DIR      cache root for downloaded models;\n"
+        "                         default: $GENIEX_DATADIR or ~/.cache/geniex\n"
+        "  --hub NAME             auto | hf | aihub | modelscope | volces\n"
+        "                         (default auto). hf reads $GENIEX_HFTOKEN.\n"
+        "  --chipset SLUG         AI Hub chipset slug, e.g. qualcomm-snapdragon-x-elite\n"
+        "                         (only consumed when the resolved hub is aihub)\n"
         "  --help / -h\n",
         argv0,
         argv0);
+}
+
+/* True when `s` looks like a filesystem path rather than a model-manager id.
+ *
+ * Heuristic: model-manager ids are always `org/repo[:quant]` shape — at
+ * least one '/', no leading '/' or '\', no Windows drive prefix, no '.' in
+ * the leading segment. Anything else (absolute path, ./relative, plain
+ * filename like `model.gguf`, an existing directory) routes to the path
+ * branch.
+ *
+ * Edge case: a bare `model.gguf` in the current working directory — a path
+ * — has no '/' so this returns true, which is the correct branch.
+ * Conversely an org/repo without quant (e.g. `NexaAI/Qwen3-4B-GGUF`) has
+ * '/' in the middle and falls through to the model-id branch. */
+static bool looks_like_path(const char* s) {
+    if (!s || !*s) return true;
+    if (s[0] == '/' || s[0] == '.' || s[0] == '\\') return true;
+#ifdef _WIN32
+    if (s[1] == ':' && (s[2] == '\\' || s[2] == '/')) return true;
+#endif
+    /* No slash anywhere → treat as a filename in cwd, not a model id. */
+    if (!strchr(s, '/')) return true;
+    /* `org/repo` shape: keep as model id. */
+    return false;
+}
+
+static geniex_HubSource parse_hub(const char* s) {
+    if (!s || !*s || strcmp(s, "auto") == 0) return GENIEX_HUB_AUTO;
+    if (strcmp(s, "hf") == 0 || strcmp(s, "huggingface") == 0) return GENIEX_HUB_HUGGINGFACE;
+    if (strcmp(s, "aihub") == 0) return GENIEX_HUB_AIHUB;
+    if (strcmp(s, "modelscope") == 0) return GENIEX_HUB_MODELSCOPE;
+    if (strcmp(s, "volces") == 0) return GENIEX_HUB_VOLCES;
+    fprintf(stderr, "ERROR: unknown --hub %s (expected auto|hf|aihub|modelscope|volces)\n", s);
+    exit(2);
+}
+
+/* Split `org/repo[:quant]` into a NUL-terminated `name` slot and an
+ * optional `quant` (NULL when absent). Stores both in `buf` so the caller
+ * doesn't manage two allocations. */
+static void split_id(char* buf, const char** name_out, const char** quant_out) {
+    *name_out   = buf;
+    *quant_out  = NULL;
+    char* colon = strchr(buf, ':');
+    if (colon) {
+        *colon     = '\0';
+        *quant_out = colon + 1;
+        if ((*quant_out)[0] == '\0') *quant_out = NULL;
+    }
+}
+
+/* Resolve a model-manager id to local paths, downloading if missing. On
+ * success populates o->mm_model_path / mm_mmproj / mm_tokenizer (heap-
+ * owned) and rewrites o->model_path / mmproj_path / tokenizer_path to
+ * point at them. Returns 0 on success.
+ *
+ * Calls geniex_model_init() lazily (idempotent for the matrix-mode case
+ * where many cells share one process). */
+static int resolve_via_mm(options_t* o, const char* id_in) {
+    if (!g_mm_inited) {
+        int32_t rc = geniex_model_init(o->mm_data_dir);
+        if (rc != GENIEX_SUCCESS) {
+            const char* m = geniex_model_last_error_message();
+            fprintf(stderr, "ERROR: geniex_model_init: %s (%d)\n", m ? m : "?", rc);
+            return 1;
+        }
+        g_mm_inited = true;
+    }
+
+    /* Copy the id into a writable buffer for in-place split_id(). */
+    size_t n   = strlen(id_in);
+    char*  buf = (char*)malloc(n + 1);
+    if (!buf) return 1;
+    memcpy(buf, id_in, n + 1);
+    const char* name;
+    const char* quant;
+    split_id(buf, &name, &quant);
+
+    /* Try `get_paths` first — already cached is the common path on the
+     * second cell of a matrix. Fall through to pull on file-not-found. */
+    geniex_ModelPaths paths;
+    memset(&paths, 0, sizeof(paths));
+    int32_t rc = geniex_model_get_paths(name, &paths);
+    if (rc != GENIEX_SUCCESS) {
+        geniex_ModelPullInput in;
+        memset(&in, 0, sizeof(in));
+        in.struct_size = (uint32_t)sizeof(in);
+        in.model_name  = name;
+        in.quant       = quant;
+        in.hub         = parse_hub(o->mm_hub);
+        in.chipset     = o->mm_chipset;
+        in.model_type  = GENIEX_MODEL_TYPE_AUTO;
+        fprintf(stderr, "[mm  ] pulling %s%s%s ...\n", name, quant ? ":" : "", quant ? quant : "");
+        rc = geniex_model_pull(&in);
+        if (rc != GENIEX_SUCCESS) {
+            const char* m = geniex_model_last_error_message();
+            fprintf(stderr, "ERROR: geniex_model_pull(%s): %s (%d)\n", id_in, m ? m : "?", rc);
+            free(buf);
+            return 1;
+        }
+        rc = geniex_model_get_paths(name, &paths);
+        if (rc != GENIEX_SUCCESS) {
+            const char* m = geniex_model_last_error_message();
+            fprintf(stderr, "ERROR: geniex_model_get_paths(%s): %s (%d)\n", id_in, m ? m : "?", rc);
+            free(buf);
+            return 1;
+        }
+    }
+    free(buf);
+
+    /* Take ownership of the heap strings the SDK handed us. */
+    o->mm_model_path = paths.model_path;
+    o->mm_mmproj     = paths.mmproj_path;
+    o->mm_tokenizer  = paths.tokenizer_path;
+    paths.model_path = paths.mmproj_path = paths.tokenizer_path = NULL;
+    /* model_dir / model_name / plugin_id aren't consumed here; free via the
+     * paths_free() helper to keep the allocator pairing intact. */
+    geniex_model_paths_free(&paths);
+
+    o->model_path = o->mm_model_path;
+    if (o->mm_mmproj) o->mmproj_path = o->mm_mmproj;
+    if (o->mm_tokenizer) o->tokenizer_path = o->mm_tokenizer;
+    fprintf(stderr, "[mm  ] resolved %s -> %s\n", id_in, o->mm_model_path);
+    return 0;
 }
 
 /* If `path` is a directory, return a heap-allocated path to a regular file
@@ -320,6 +485,9 @@ static void parse_args(int argc, char** argv, options_t* o) {
     o->model_path         = NULL;
     o->tokenizer_path     = NULL;
     o->mmproj_path        = NULL;
+    o->mm_model_path      = NULL;
+    o->mm_mmproj          = NULL;
+    o->mm_tokenizer       = NULL;
     o->force_vlm          = false;
     o->image_count        = 0;
     o->audio_count        = 0;
@@ -340,6 +508,9 @@ static void parse_args(int argc, char** argv, options_t* o) {
     o->cell_id            = NULL;
     o->matrix_file        = NULL;
     o->output_json_dir    = NULL;
+    o->mm_data_dir        = NULL;
+    o->mm_chipset         = NULL;
+    o->mm_hub             = NULL;
 
     for (int i = 1; i < argc; ++i) {
         const char* a = argv[i];
@@ -409,6 +580,12 @@ static void parse_args(int argc, char** argv, options_t* o) {
             o->matrix_file = arg_value(argc, argv, &i, a);
         } else if (strcmp(a, "--output-json-dir") == 0) {
             o->output_json_dir = arg_value(argc, argv, &i, a);
+        } else if (strcmp(a, "--mm-data-dir") == 0) {
+            o->mm_data_dir = arg_value(argc, argv, &i, a);
+        } else if (strcmp(a, "--chipset") == 0) {
+            o->mm_chipset = arg_value(argc, argv, &i, a);
+        } else if (strcmp(a, "--hub") == 0) {
+            o->mm_hub = arg_value(argc, argv, &i, a);
         } else if (strcmp(a, "--token-callback-delay-us") == 0) {
             g_token_callback_delay_us = atoi(arg_value(argc, argv, &i, a));
         } else {
@@ -1120,6 +1297,17 @@ static void write_md_row(const options_t* o, int32_t ngl, int64_t model_size_byt
  * `geniex_init` / `geniex_deinit` so multiple cells in matrix mode share
  * one plugin-init pass. */
 static int run_one_cell(options_t* o) {
+    /* Model-manager branch: column 4 (matrix) or `-m` (single-cell) is a
+     * model id. Resolve to local paths (pulling on first use); subsequent
+     * cells with the same id hit the cache. mmproj/tokenizer columns from
+     * the matrix file are ignored in this branch — the manager owns the
+     * full path tuple. */
+    if (!looks_like_path(o->model_path)) {
+        if (resolve_via_mm(o, o->model_path) != 0) {
+            return 1;
+        }
+    }
+
     char* anchored = resolve_local_anchor(o->model_path);
     if (anchored) {
         fprintf(stderr, "[info] resolved model dir to anchor: %s\n", anchored);
@@ -1191,6 +1379,18 @@ static int run_one_cell(options_t* o) {
     if (anchored) free(anchored);
     if (rout.device_id) geniex_free(rout.device_id);
     if (rout.warning) geniex_free(rout.warning);
+    if (o->mm_model_path) {
+        geniex_free(o->mm_model_path);
+        o->mm_model_path = NULL;
+    }
+    if (o->mm_mmproj) {
+        geniex_free(o->mm_mmproj);
+        o->mm_mmproj = NULL;
+    }
+    if (o->mm_tokenizer) {
+        geniex_free(o->mm_tokenizer);
+        o->mm_tokenizer = NULL;
+    }
     return 0;
 }
 
@@ -1299,6 +1499,13 @@ int main(int argc, char** argv) {
     }
 
     if (o.prompt_buf) free(o.prompt_buf);
+    if (g_mm_inited) {
+        /* Best-effort: release the model-manager runtime before geniex_deinit.
+         * Failure here is non-fatal — we already produced the JSON the
+         * caller cares about. */
+        geniex_model_deinit();
+        g_mm_inited = false;
+    }
     check(geniex_deinit(), "geniex_deinit");
     return rc == 0 ? 0 : 1;
 }

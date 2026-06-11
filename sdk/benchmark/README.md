@@ -10,8 +10,11 @@ Flag naming follows llama.cpp's
 `-m / --model`, `--n-gpu-layers`, `--no-warmup` — so users moving between
 the two tools read the same vocabulary.
 
-It runs from a **local model path** (a geniex bundle dir, or a `.gguf` file / its
-folder) on Windows, Android, and Linux — the same binary feeds the scorecard.
+It accepts either a **local model path** (a geniex bundle dir, or a `.gguf`
+file / its folder) or a **model-manager id** (`org/repo[:quant]`); ids are
+resolved via the `geniex_model_*` C API — downloading on first use and
+reusing the cached copy thereafter. Runs on Windows, Android, and Linux —
+the same binary feeds the scorecard.
 
 ## Build
 
@@ -185,14 +188,30 @@ For a one-cell-per-process invocation (cold-start each time, useful as
 the reference for a customer-facing single-call workload), pass
 `--plugin / --device / -m` directly without `--matrix-file`.
 
-Models must be pre-pulled (e.g. `geniex-py pull bartowski/Qwen_Qwen3-0.6B-GGUF:Q4_0`)
-before invoking this binary — the C side does not include a model
-puller.
+Either a path or a model-manager id works in column 4; the binary calls
+`geniex_model_pull` on first use and reuses the cached copy on subsequent
+cells. Pre-pulling with `geniex-py pull ...` is still supported and skips
+the cold download.
 
-## Why no doctest? Why no model manager dependency?
+```bash
+cat > matrix.tsv <<EOF
+# cell_id<TAB>plugin<TAB>device<TAB>model_path_or_id
+Qwen3-0.6B-cpu	llama_cpp	cpu	bartowski/Qwen_Qwen3-0.6B-GGUF:Q4_0
+Qwen3-4B-qairt	qairt	npu	qualcomm/qwen3_4b
+EOF
+geniex-bench --matrix-file matrix.tsv --output-json-dir results/ \
+  --mm-data-dir ./cache --chipset qualcomm-snapdragon-x-elite
+```
+
+## Why a model-manager dependency now?
 
 The earlier `sdk/tests/` C++ doctest tree was unused in CI and overlapped
-the Python e2e suite. It is replaced by this single, dependency-free C
-example. Caching, alias resolution, and matrix orchestration stay on the
-Python side ([`bindings/python/geniex/cli.py`](../../../bindings/python/geniex/cli.py));
-the C binary stays small and exercises only the public API.
+the Python e2e suite. It was replaced by this single C example. Caching,
+alias resolution, and matrix orchestration originally stayed on the
+Python side; the QDC scorecard ran `curl` / `Invoke-WebRequest` on each
+device for every model. That serial download was the slowest phase of
+the scorecard and OOMed on large GGUFs on Windows. Linking the C binary
+against `libgeniex_model` and resolving column-4 model ids via
+`geniex_model_pull` collapses the device-side download to one
+multi-connection, resumable HTTPS call — and exercises the same model
+manager our Python / Go / JNI bindings ship to users.
