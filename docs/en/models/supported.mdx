@@ -63,10 +63,11 @@ geniex infer ai-hub-models/Qwen3-4B
 
 ### Self-converted Qualcomm AI Engine Direct bundles
 
-Bundles outside the `ai-hub-models/*` namespace need to be downloaded locally first, then pulled with `--model-hub localfs`.
+Bundles outside the `ai-hub-models/*` namespace need to be downloaded locally first, then pulled with `--local-path`.
 
-Make sure the [Hugging Face CLI](https://huggingface.co/docs/huggingface_hub/en/guides/cli) is installed, then on Windows ARM64:
+Make sure the [Hugging Face CLI](https://huggingface.co/docs/huggingface_hub/en/guides/cli) is installed:
 
+<CodeGroup>
 ```powershell windows
 # Set model name (must match the HF subfolder name exactly)
 $model = "llama_v3_2_1b_instruct"
@@ -77,12 +78,30 @@ hf download yichqian/geniex-qairt-models `
   --include "$model/**"
 
 # Pull using the downloaded folder (absolute path)
-geniex pull local/$model --model-hub localfs `
-  --local-path (Resolve-Path "$model\$model").Path
+geniex pull local/$model --local-path (Resolve-Path "$model\$model").Path
 
 # Run inference
 geniex infer local/$model
 ```
+
+```bash linux
+# Set model name (must match the HF subfolder name exactly)
+model="llama_v3_2_1b_instruct"
+
+# Download the model from Hugging Face
+hf download yichqian/geniex-qairt-models \
+  --local-dir "$model" \
+  --include "$model/**"
+
+# Pull using the downloaded folder (absolute path)
+geniex pull "local/$model" --local-path "$(realpath "$model/$model")"
+
+# Run inference
+geniex infer "local/$model"
+```
+</CodeGroup>
+
+<Note>`geniex pull` copies model files into its local cache. After a successful pull, you can safely delete the original download to reclaim disk space. Use `geniex list` to confirm the model is cached.</Note>
 
 <Note>Qualcomm AI Engine Direct is NPU-only. Pass `--device npu` or omit the flag.</Note>
 

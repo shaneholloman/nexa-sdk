@@ -12,12 +12,24 @@ import Feedback from "/snippets/page-feedback.mdx";
 Download a model and store it locally.
 
 ```powershell
-geniex pull <model-name>
+geniex pull <model-name>[:<precision>]
 ```
 
-The CLI guides you through setup:
+| Flag | Description |
+|---|---|
+| `--model-hub` | Model source: `aihub` \| `hf` \| `localfs`. Auto-detected when omitted. |
+| `--local-path` | Path to a local directory or AI Hub `.zip` file. Implies `--model-hub localfs`. |
+| `--model-type` | Model type: `llm` \| `vlm`. Auto-detected when omitted. |
 
-**. Precision (Quantization) (llama.cpp only)**
+**Pulling from a local path:**
+
+```powershell
+geniex pull local/my-model --local-path /path/to/model-dir
+```
+
+<Note>`pull` copies files into the GenieX cache. After a successful pull you can safely delete the source to avoid keeping two copies.</Note>
+
+**Precision (Quantization) (llama.cpp only)**
 
 For GGUF models the CLI prompts you to pick a precision:
 
