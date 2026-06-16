@@ -28,9 +28,9 @@ import (
 // place of the raw error message. Keep the list short — only well-
 // understood, user-actionable cases belong here.
 const (
-	hintParamNotSupported = `⚠️ A flag you passed is not supported by the plugin.
+	hintParamNotSupported = `⚠️ A flag you passed is not supported by the runtime.
 
-👉 Run 'geniex infer -h' to see which flags are plugin-specific.`
+👉 Run 'geniex infer -h' to see which flags are runtime-specific.`
 
 	hintNotSupport = `⚠️ Oops. This model type is not supported yet.
 
@@ -46,13 +46,13 @@ const (
 - Check your NPU / GPU driver version and update it if it's out of date.
 - See help in our discord or slack.`
 
-	hintPluginLoad = `⚠️ Oops. Plugin failed to load.
+	hintPluginLoad = `⚠️ Oops. Runtime failed to load.
 
 👉 Try these:
-- Ensure all plugin dependencies are correct.
+- Ensure all runtime dependencies are correct.
 - See help in our discord or slack.`
 
-	hintPluginInvalid = `⚠️ Oops. Plugin is invalid.
+	hintPluginInvalid = `⚠️ Oops. Runtime is invalid.
 
 👉 Try these:
 - This model may not be compatible with your system. Try another model.

@@ -580,7 +580,7 @@ func writeKeepAliveError(c *gin.Context, err error, pluginId string) bool {
 		c.JSON(http.StatusNotFound, map[string]any{"error": "model not found"})
 	case errors.Is(err, geniex_sdk.ErrCommonParamNotSupported):
 		c.JSON(http.StatusBadRequest, map[string]any{
-			"error": fmt.Sprintf("a parameter in the request is not supported by the %s plugin", pluginId),
+			"error": fmt.Sprintf("a parameter in the request is not supported by the %s runtime", pluginId),
 			"code":  geniex_sdk.SDKErrorCode(err),
 		})
 	default:

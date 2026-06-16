@@ -76,7 +76,7 @@ func configGetCmd() *cobra.Command {
 				return fmt.Errorf("failed to get configuration: %w", err)
 			}
 			// Unset keys print nothing so the output is easy to use in
-			// scripts (e.g. `$(geniex config get device)`).
+			// scripts (e.g. `$(geniex config get chipset)`).
 			if value != "" {
 				fmt.Println(value)
 			}
@@ -90,16 +90,16 @@ func configSetCmd() *cobra.Command {
 		Use:   "set <key> [value]",
 		Short: "Set a configuration value",
 		Long: "Set a specific configuration key to a new value. Pass an empty string to clear the value.\n\n" +
-			"For the \"device\" key, omit the value to launch an interactive chipset picker.\n\n" +
+			"For the \"chipset\" key, omit the value to launch an interactive chipset picker.\n\n" +
 			"Available keys: " + strings.Join(store.ConfigKeys, ", "),
 		Args:      cobra.MatchAll(cobra.RangeArgs(1, 2), validConfigKeyArg),
 		ValidArgs: store.ConfigKeys,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			key := args[0]
 
-			// Device key with no explicit value: launch the interactive picker.
+			// Chipset key with no explicit value: launch the interactive picker.
 			switch key {
-			case store.ConfigKeyDevice:
+			case store.ConfigKeyChipset:
 				if len(args) < 2 {
 					_, err := pickChipset()
 					return err
@@ -122,7 +122,7 @@ func configSetCmd() *cobra.Command {
 
 // pickChipset lists the chipsets Qualcomm AI Hub supports and lets the user
 // select one interactively, defaulting to the host's detected chipset when it
-// can be probed. The chosen chipset name is persisted under the "device" key
+// can be probed. The chosen chipset name is persisted under the "chipset" key
 // and returned to the caller.
 func pickChipset() (string, error) {
 	chipsets, err := geniex_sdk.ModelListChipsets()
@@ -160,17 +160,17 @@ func pickChipset() (string, error) {
 	}
 
 	if err := huh.NewSelect[string]().
-		Title("Select your device chipset").
+		Title("Select your chipset").
 		Options(options...).
 		Value(&selected).
 		Run(); err != nil {
 		return "", err
 	}
 
-	if err := store.Get().ConfigSet(store.ConfigKeyDevice, selected); err != nil {
-		return "", fmt.Errorf("failed to save device: %w", err)
+	if err := store.Get().ConfigSet(store.ConfigKeyChipset, selected); err != nil {
+		return "", fmt.Errorf("failed to save chipset: %w", err)
 	}
-	fmt.Println(render.GetTheme().Info.Sprintf("device = %s", selected))
+	fmt.Println(render.GetTheme().Info.Sprintf("chipset = %s", selected))
 	return selected, nil
 }
 

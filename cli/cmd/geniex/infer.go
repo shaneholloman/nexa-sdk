@@ -48,7 +48,7 @@ var (
 	tokenFile      string
 	input          string
 	systemPrompt   string
-	device         string
+	computeUnit    string
 
 	// sampler config
 	temperature       float32
@@ -85,7 +85,7 @@ var (
 	llmFlags = func() *pflag.FlagSet {
 		llmFlags := pflag.NewFlagSet("LLM/VLM Model", pflag.ExitOnError)
 		llmFlags.SortFlags = false
-		llmFlags.StringVarP(&device, "device", "d", "", "device to run on: cpu, gpu, npu, or hybrid (default: hybrid for llama.cpp, npu for qairt)")
+		llmFlags.StringVarP(&computeUnit, "compute", "c", "", "compute unit to run on: cpu, gpu, npu, or hybrid (default: hybrid for llama_cpp, npu for qairt)")
 		llmFlags.Int32VarP(&ngl, "ngl", "n", 0, "number of layers to offload to gpu/npu (llama_cpp only, default 999)")
 		llmFlags.Int32VarP(&nctx, "nctx", "", 0, "context window size (llama_cpp only, default 4096)")
 		llmFlags.Int32VarP(&maxTokens, "max-tokens", "", 2048, "max tokens")
@@ -147,7 +147,7 @@ func infer() *cobra.Command {
 
 		geniex_sdk.DeInit()
 		if errors.Is(err, geniex_sdk.ErrCommonParamNotSupported) {
-			err = fmt.Errorf("plugin %s: %w", paths.PluginID, err)
+			err = fmt.Errorf("runtime %s: %w", paths.PluginID, err)
 		}
 		return err
 	}
@@ -219,10 +219,10 @@ func loadStopSequences() ([]string, error) {
 	return stopSequences, nil
 }
 
-// resolveModelParams resolves --device / --ngl / --nctx into the
+// resolveModelParams resolves --compute / --ngl / --nctx into the
 // (device_id, ngl, nctx) triple the SDK expects. For llama_cpp, unset
 // --ngl / --nctx fall back to 999 / 4096; other plugins keep 0 so their
-// param-guard isn't tripped by the flag default. Device alias mapping
+// param-guard isn't tripped by the flag default. Compute-unit alias mapping
 // is delegated to geniex_resolve_device (sdk/src/device.cpp).
 func resolveModelParams(pluginID, modelName string) (deviceID string, resolvedNgl, resolvedNctx int32, err error) {
 	resolvedNgl, resolvedNctx = ngl, nctx
@@ -238,7 +238,7 @@ func resolveModelParams(pluginID, modelName string) (deviceID string, resolvedNg
 	resolved, err := geniex_sdk.ResolveDevice(geniex_sdk.ResolveDeviceInput{
 		PluginID:   pluginID,
 		ModelName:  modelName,
-		Mode:       device,
+		Mode:       computeUnit,
 		NglDefault: resolvedNgl,
 	})
 	if err != nil {

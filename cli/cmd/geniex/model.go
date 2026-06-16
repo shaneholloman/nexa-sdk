@@ -206,7 +206,7 @@ func list() *cobra.Command {
 type listedModel struct {
 	Name       string   `json:"name"`
 	Size       int64    `json:"size"`
-	Plugin     string   `json:"plugin"`
+	Runtime    string   `json:"runtime"`
 	Type       string   `json:"type"`
 	Precisions []string `json:"precisions"`
 }
@@ -230,7 +230,7 @@ func printListTable(models []geniex_sdk.ModelDetail, verbose bool) {
 	tw.SetOutputMirror(os.Stdout)
 	tw.SetStyle(table.StyleLight)
 	if verbose {
-		tw.AppendHeader(table.Row{"NAME", "SIZE", "PLUGIN", "TYPE", "PRECISIONS"})
+		tw.AppendHeader(table.Row{"NAME", "SIZE", "RUNTIME", "TYPE", "PRECISIONS"})
 	} else {
 		tw.AppendHeader(table.Row{"NAME", "SIZE", "PRECISIONS"})
 	}
@@ -257,7 +257,7 @@ func toListedModels(models []geniex_sdk.ModelDetail) []listedModel {
 		out = append(out, listedModel{
 			Name:       m.Name,
 			Size:       m.TotalSize,
-			Plugin:     m.PluginID,
+			Runtime:    m.PluginID,
 			Type:       m.ModelType.String(),
 			Precisions: downloadedPrecisions(m, false),
 		})
@@ -273,14 +273,14 @@ func printListJSON(models []geniex_sdk.ModelDetail) error {
 
 func printListCSV(models []geniex_sdk.ModelDetail) error {
 	w := csv.NewWriter(os.Stdout)
-	if err := w.Write([]string{"name", "size", "plugin", "type", "precisions"}); err != nil {
+	if err := w.Write([]string{"name", "size", "runtime", "type", "precisions"}); err != nil {
 		return err
 	}
 	for _, m := range toListedModels(models) {
 		row := []string{
 			m.Name,
 			strconv.FormatInt(m.Size, 10),
-			m.Plugin,
+			m.Runtime,
 			m.Type,
 			strings.Join(m.Precisions, ","),
 		}
@@ -373,12 +373,12 @@ func pullModel(ctx context.Context, name string, quant string) error {
 	// Resolve a chipset before the spinner (the picker can't share the terminal
 	// with one): configured value wins, then a host probe, then an interactive
 	// picker. The SDK decides whether the chipset is actually used for this pull.
-	if dev, _, _ := store.Get().ConfigGet(store.ConfigKeyDevice); dev != "" {
-		in.Chipset = dev
+	if chipset, _, _ := store.Get().ConfigGet(store.ConfigKeyChipset); chipset != "" {
+		in.Chipset = chipset
 	} else if detected, _ := geniex_sdk.ModelDetectChipset(); detected != "" {
 		in.Chipset = detected
 	} else {
-		fmt.Println(render.GetTheme().Info.Sprint("No device configured. Please select your device first."))
+		fmt.Println(render.GetTheme().Info.Sprint("No chipset configured. Please select your chipset first."))
 		if in.Chipset, err = pickChipset(); err != nil {
 			return err
 		}
