@@ -103,7 +103,7 @@ func ChatCompletions(c *gin.Context) {
 	}
 
 	slog.Info("ChatCompletions", "param", param)
-	name, _ := geniex_sdk.SplitNameQuant(param.Model)
+	name, _ := geniex_sdk.SplitNamePrecision(param.Model)
 	modelType, err := geniex_sdk.ModelGetType(name)
 	if err != nil {
 		slog.Error("Failed to get model type", "model", param.Model, "error", err)
@@ -119,16 +119,16 @@ func ChatCompletions(c *gin.Context) {
 
 	// Automatically adjust NCtx if MaxCompletionTokens is larger (llama_cpp only — QAIRT
 	// does not use NCtx and the 0-default must not be overwritten for non-llama_cpp plugins).
-	if paths.PluginID == geniex_sdk.PluginLlamaCpp && param.NCtx < int32(param.MaxCompletionTokens.Value) {
+	if paths.RuntimeID == geniex_sdk.RuntimeLlamaCpp && param.NCtx < int32(param.MaxCompletionTokens.Value) {
 		slog.Debug("Adjust NCtx to MaxCompletionTokens", "from", param.NCtx, "to", param.MaxCompletionTokens.Value)
 		param.NCtx = int32(param.MaxCompletionTokens.Value)
 	}
 
 	switch modelType {
 	case geniex_sdk.ModelTypeLLM:
-		chatCompletionsLLM(c, param, paths.PluginID)
+		chatCompletionsLLM(c, param, paths.RuntimeID)
 	case geniex_sdk.ModelTypeVLM:
-		chatCompletionsVLM(c, param, paths.PluginID)
+		chatCompletionsVLM(c, param, paths.RuntimeID)
 	default:
 		slog.Error("Model type not support", "model_type", modelType)
 		c.JSON(http.StatusBadRequest, map[string]any{"error": "model type not support"})
@@ -580,7 +580,7 @@ func writeKeepAliveError(c *gin.Context, err error, pluginId string) bool {
 		c.JSON(http.StatusNotFound, map[string]any{"error": "model not found"})
 	case errors.Is(err, geniex_sdk.ErrCommonParamNotSupported):
 		c.JSON(http.StatusBadRequest, map[string]any{
-			"error": fmt.Sprintf("a parameter in the request is not supported by the %s plugin", pluginId),
+			"error": fmt.Sprintf("a parameter in the request is not supported by the %s runtime", pluginId),
 			"code":  geniex_sdk.SDKErrorCode(err),
 		})
 	default:

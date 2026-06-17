@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.res.AssetManager
 import android.system.Os
 import android.util.Log
-import com.geniex.sdk.bean.PluginIdValue
+import com.geniex.sdk.bean.RuntimeIdValue
 import com.geniex.sdk.jni.ModelManager
 import java.io.File
 import java.io.IOException
@@ -43,8 +43,8 @@ class GenieXSdk private constructor() {
         synchronized(this) {
             if (!pluginsRegistered) {
                 arrayOf(
-                    PluginIdValue.LLAMA_CPP.value,
-                    PluginIdValue.QAIRT.value
+                    RuntimeIdValue.LLAMA_CPP.value,
+                    RuntimeIdValue.QAIRT.value
                 ).forEach { pluginName ->
                     File(
                         nativeLibPath,

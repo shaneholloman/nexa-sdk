@@ -218,6 +218,11 @@ jobs:
 
       - uses: actions/download-artifact@v8
         with:
+          name: sdk-android-arm64
+          path: sdk-android-arm64
+
+      - uses: actions/download-artifact@v8
+        with:
           name: cli-setup-windows-arm64
           path: .
 
@@ -276,7 +281,31 @@ jobs:
           zip -r "geniex-sdk-windows-arm64-${RELEASE_TAG}${sdk_suffix}.zip" sdk-windows-arm64
           zip -r "geniex-sdk-linux-arm64-${RELEASE_TAG}.zip" sdk-linux-arm64
 
-          rm -rf sdk-windows-arm64 sdk-linux-arm64 cli-linux-arm64 to-sign
+          # Package standalone geniex-bench archives (bin + runtime libs).
+          for plat in linux-arm64 windows-arm64 android-arm64; do
+            src="sdk-${plat}"
+            bench_dir="geniex-bench-${plat}-${RELEASE_TAG}"
+            mkdir -p "${bench_dir}/bin" "${bench_dir}/lib"
+            if [[ "$plat" == "windows-arm64" ]]; then
+              cp "${src}/bin/geniex-bench.exe" "${bench_dir}/bin/"
+              cp "${src}"/lib/*.dll "${bench_dir}/lib/" 2>/dev/null || true
+            else
+              cp "${src}/bin/geniex-bench" "${bench_dir}/bin/"
+              chmod +x "${bench_dir}/bin/geniex-bench"
+              cp "${src}"/lib/*.so "${bench_dir}/lib/" 2>/dev/null || true
+            fi
+            # Include plugin libs (llama_cpp / qairt subdirs).
+            cp -r "${src}"/lib/llama_cpp "${bench_dir}/lib/" 2>/dev/null || true
+            cp -r "${src}"/lib/qairt "${bench_dir}/lib/" 2>/dev/null || true
+            if [[ "$plat" == "windows-arm64" ]]; then
+              zip -r "${bench_dir}.zip" "${bench_dir}"
+            else
+              tar -czf "${bench_dir}.tar.gz" "${bench_dir}"
+            fi
+            rm -rf "${bench_dir}"
+          done
+
+          rm -rf sdk-windows-arm64 sdk-linux-arm64 sdk-android-arm64 cli-linux-arm64 to-sign
 
           shopt -s nullglob
           files=(*.zip *.exe *.tar.gz *.cer *.aar *.apk install-*.sh)
@@ -403,6 +432,12 @@ jobs:
             --include 'geniex-sdk-windows-arm64-*.zip.sha256' \
             --include 'geniex-sdk-linux-arm64-*.zip' \
             --include 'geniex-sdk-linux-arm64-*.zip.sha256' \
+            --include 'geniex-bench-linux-arm64-*.tar.gz' \
+            --include 'geniex-bench-linux-arm64-*.tar.gz.sha256' \
+            --include 'geniex-bench-android-arm64-*.tar.gz' \
+            --include 'geniex-bench-android-arm64-*.tar.gz.sha256' \
+            --include 'geniex-bench-windows-arm64-*.zip' \
+            --include 'geniex-bench-windows-arm64-*.zip.sha256' \
             --include "geniex-cli-setup-windows-arm64-${RELEASE_TAG}.exe" \
             --include "geniex-cli-setup-windows-arm64-${RELEASE_TAG}.exe.sha256" \
             --include "geniex-cli-linux-arm64-${RELEASE_TAG}.tar.gz" \
@@ -463,6 +498,22 @@ jobs:
           aws s3 cp \
             "release-assets/geniex-demo-${RELEASE_TAG}.apk" \
             "s3://${S3_BUCKET}/${S3_PREFIX}geniex-demo.apk" \
+            --acl public-read \
+            --cache-control "no-cache, max-age=0"
+          # geniex-bench latest pointers (one per platform).
+          aws s3 cp \
+            "release-assets/geniex-bench-linux-arm64-${RELEASE_TAG}.tar.gz" \
+            "s3://${S3_BUCKET}/${S3_PREFIX}geniex-bench-linux-arm64.tar.gz" \
+            --acl public-read \
+            --cache-control "no-cache, max-age=0"
+          aws s3 cp \
+            "release-assets/geniex-bench-android-arm64-${RELEASE_TAG}.tar.gz" \
+            "s3://${S3_BUCKET}/${S3_PREFIX}geniex-bench-android-arm64.tar.gz" \
+            --acl public-read \
+            --cache-control "no-cache, max-age=0"
+          aws s3 cp \
+            "release-assets/geniex-bench-windows-arm64-${RELEASE_TAG}.zip" \
+            "s3://${S3_BUCKET}/${S3_PREFIX}geniex-bench-windows-arm64.zip" \
             --acl public-read \
             --cache-control "no-cache, max-age=0"
 

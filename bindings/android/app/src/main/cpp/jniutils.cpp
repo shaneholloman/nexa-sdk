@@ -427,26 +427,26 @@ geniex_LlmCreateInput extract_llm_create_input(JNIEnv* env, jobject inputObj) {
         }
     }
 
-    // === plugin_id ===
-    LOGi("[JNI] [extract] locating field 'plugin_id' (Ljava/lang/String;)");
-    fid = env->GetFieldID(cls, "plugin_id", "Ljava/lang/String;");
-    if (checkAndLogJniException(env, "GetFieldID(plugin_id)") || !fid) {
-        LOGe("[JNI] [extract] field 'plugin_id' not found (Kotlin property likely)");
+    // === runtime_id ===
+    LOGi("[JNI] [extract] locating field 'runtime_id' (Ljava/lang/String;)");
+    fid = env->GetFieldID(cls, "runtime_id", "Ljava/lang/String;");
+    if (checkAndLogJniException(env, "GetFieldID(runtime_id)") || !fid) {
+        LOGe("[JNI] [extract] field 'runtime_id' not found (Kotlin property likely)");
     } else {
         jstr = (jstring)env->GetObjectField(inputObj, fid);
-        if (checkAndLogJniException(env, "GetObjectField(plugin_id)") || !jstr) {
-            LOGi("[JNI] [extract] plugin_id = (null)");
+        if (checkAndLogJniException(env, "GetObjectField(runtime_id)") || !jstr) {
+            LOGi("[JNI] [extract] runtime_id = (null)");
         } else {
             std::string s = jstring2str(env, jstr);
             out.plugin_id = hold_c_str(s);
-            LOGi("[JNI] [extract] plugin_id = %s", s.c_str());
+            LOGi("[JNI] [extract] runtime_id = %s", s.c_str());
             env->DeleteLocalRef(jstr);
         }
     }
 
-    // === device_id ===
+    // === compute_unit ===
     std::string raw_dev;
-    fid = env->GetFieldID(cls, "device_id", "Ljava/lang/String;");
+    fid = env->GetFieldID(cls, "compute_unit", "Ljava/lang/String;");
     if (fid) {
         jstr = (jstring)env->GetObjectField(inputObj, fid);
         if (jstr) {
@@ -458,7 +458,7 @@ geniex_LlmCreateInput extract_llm_create_input(JNIEnv* env, jobject inputObj) {
         ResolvedDevice r = resolve_device(out.plugin_id, out.model_name, raw_dev);
         out.device_id    = r.device_id.empty() ? nullptr : hold_c_str(r.device_id);
         if (r.ngl_override >= 0) out.config.n_gpu_layers = r.ngl_override;
-        LOGi("[JNI] [extract] device_id = %s, n_gpu_layers = %d (from raw='%s')",
+        LOGi("[JNI] [extract] compute_unit = %s, n_gpu_layers = %d (from raw='%s')",
             r.device_id.empty() ? "(null)" : r.device_id.c_str(),
             out.config.n_gpu_layers,
             raw_dev.c_str());
@@ -514,18 +514,18 @@ geniex_VlmCreateInput extract_vlm_create_input(JNIEnv* env, jobject inputObj) {
         if (configObj) env->DeleteLocalRef(configObj);
     }
 
-    // plugin_id : String
-    fid = env->GetFieldID(cls, "plugin_id", "Ljava/lang/String;");
+    // runtime_id : String
+    fid = env->GetFieldID(cls, "runtime_id", "Ljava/lang/String;");
     if (fid) {
         jstr          = (jstring)env->GetObjectField(inputObj, fid);
         out.plugin_id = jstr ? hold_c_str(jstring2str(env, jstr)) : nullptr;
         if (jstr) env->DeleteLocalRef(jstr);
     }
 
-    // device_id : String
+    // compute_unit : String
     {
         std::string raw_dev;
-        fid = env->GetFieldID(cls, "device_id", "Ljava/lang/String;");
+        fid = env->GetFieldID(cls, "compute_unit", "Ljava/lang/String;");
         if (fid) {
             jstr = (jstring)env->GetObjectField(inputObj, fid);
             if (jstr) {
@@ -536,7 +536,7 @@ geniex_VlmCreateInput extract_vlm_create_input(JNIEnv* env, jobject inputObj) {
         ResolvedDevice r = resolve_device(out.plugin_id, out.model_name, raw_dev);
         out.device_id    = r.device_id.empty() ? nullptr : hold_c_str(r.device_id);
         if (r.ngl_override >= 0) out.config.n_gpu_layers = r.ngl_override;
-        LOGi("[JNI] [extract_vlm] device_id = %s, n_gpu_layers = %d (from raw='%s')",
+        LOGi("[JNI] [extract_vlm] compute_unit = %s, n_gpu_layers = %d (from raw='%s')",
             r.device_id.empty() ? "(null)" : r.device_id.c_str(),
             out.config.n_gpu_layers,
             raw_dev.c_str());

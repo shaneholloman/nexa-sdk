@@ -1,4 +1,4 @@
-# geniex_benchmark — C inference benchmark example
+# geniex-bench — C inference benchmark example
 
 Single-file C example that drives the public geniex C API. One invocation
 runs one `(plugin, device, model)` cell (warmup + repeated measured runs)
@@ -10,8 +10,11 @@ Flag naming follows llama.cpp's
 `-m / --model`, `--n-gpu-layers`, `--no-warmup` — so users moving between
 the two tools read the same vocabulary.
 
-It runs from a **local model path** (a geniex bundle dir, or a `.gguf` file / its
-folder) on Windows, Android, and Linux — the same binary feeds the scorecard.
+It accepts either a **local model path** (a geniex bundle dir, or a `.gguf`
+file / its folder) or a **model-manager id** (`org/repo[:quant]`); ids are
+resolved via the `geniex_model_*` C API — downloading on first use and
+reusing the cached copy thereafter. Runs on Windows, Android, and Linux —
+the same binary feeds Geniex Bench.
 
 ## Build
 
@@ -29,9 +32,9 @@ Gated on the `GENIEX_BENCHMARK` cmake option, which the snapdragon presets in
 ```powershell
 cd sdk
 cmake --preset arm64-windows-snapdragon-release -B build
-cmake --build build -j --target geniex_benchmark
-# → build\benchmark\geniex_benchmark.exe
-cmake --install build --prefix pkg-geniex   # optional → pkg-geniex\bin\geniex_benchmark.exe
+cmake --build build -j --target geniex-bench
+# → build\benchmark\geniex-bench.exe
+cmake --install build --prefix pkg-geniex   # optional → pkg-geniex\bin\geniex-bench.exe
 ```
 
 ### Linux (cross-compile from x86_64)
@@ -45,9 +48,9 @@ docker run --rm -u $(id -u):$(id -g) \
   --platform linux/amd64 \
   ghcr.io/qcom-ai-hub/geniex-toolchain-linux:v0.0.2 \
   bash -c 'cmake --preset arm64-linux-snapdragon-release -B build-linux . \
-    && cmake --build build-linux -j --target geniex_benchmark \
+    && cmake --build build-linux -j --target geniex-bench \
     && cmake --install build-linux --prefix pkg-geniex'
-# → pkg-geniex/bin/geniex_benchmark
+# → pkg-geniex/bin/geniex-bench
 ```
 
 ### Android (cross-compile from Linux)
@@ -58,9 +61,9 @@ docker run --rm -u $(id -u):$(id -g) \
   --platform linux/amd64 \
   ghcr.io/qcom-ai-hub/geniex-toolchain-android:v0.0.1 \
   bash -c 'cmake --preset arm64-android-snapdragon-release -B build-android . \
-    && cmake --build build-android -j --target geniex_benchmark \
+    && cmake --build build-android -j --target geniex-bench \
     && cmake --install build-android --prefix pkg-geniex'
-# → pkg-geniex/bin/geniex_benchmark
+# → pkg-geniex/bin/geniex-bench
 ```
 
 ## Run
@@ -73,19 +76,19 @@ and `GENIEX_PLUGIN_PATH=./lib` (see [`notes/run.md`](../../../notes/run.md)).
 
 ```bash
 # LLM, llama_cpp — point -m at a .gguf file
-geniex_benchmark \
+geniex-bench \
   --plugin llama_cpp --device hybrid \
   -m /path/to/Qwen3-0.6B-Q4_0.gguf
 
 # LLM, QAIRT — the bundle dir is the "model path"
-geniex_benchmark \
+geniex-bench \
   --plugin qairt --device npu \
   -m /path/to/qualcomm/Qwen3-4B-Instruct-2507/
 
 # VLM, llama_cpp — pass the model gguf + its mmproj (switches to VLM mode)
 # and one or more --image. The prompt is run through the model's chat template
 # (which places the image tokens) before generation.
-geniex_benchmark \
+geniex-bench \
   --plugin llama_cpp --device hybrid \
   -m /path/to/SmolVLM-500M-Instruct-Q8_0.gguf \
   --mmproj-path /path/to/mmproj-SmolVLM-500M-Instruct-f16.gguf \
@@ -93,19 +96,19 @@ geniex_benchmark \
 
 # VLM, QAIRT — the vision encoder is baked into the bundle (no mmproj), so
 # pass --vlm to force VLM mode plus one or more --image
-geniex_benchmark \
+geniex-bench \
   --plugin qairt --device npu --vlm \
   -m /path/to/qualcomm/Qwen2.5-VL-7B-Instruct/ \
   --image /path/to/sample.jpg
 
 # GPU (llama_cpp) — the gpu alias selects GPUOpenCL but offloads no layers by
 # default; pass a high --n-gpu-layers to actually run on the Adreno GPU
-geniex_benchmark \
+geniex-bench \
   --plugin llama_cpp --device gpu --n-gpu-layers 999 \
   -m /path/to/Qwen3-4B-Q4_K_M.gguf
 
 # Customise: prompt, sample count, output files
-geniex_benchmark \
+geniex-bench \
   --plugin llama_cpp --device hybrid \
   -m .../Qwen3-1.7B-Q4_0.gguf \
   --warmup 1 -r 3 \
@@ -117,16 +120,16 @@ geniex_benchmark \
 On Windows the same invocations work with `.exe` and backslash paths, e.g.:
 
 ```powershell
-build\benchmark\geniex_benchmark.exe --plugin qairt --device npu `
+build\benchmark\geniex-bench.exe --plugin qairt --device npu `
   -m $env:USERPROFILE\.cache\geniex\models\qualcomm\Qwen3-4B-Instruct-2507
 ```
 
-Run `geniex_benchmark --help` for the full flag list.
+Run `geniex-bench --help` for the full flag list.
 
 ## Defaults
 
 - `n_gen=128`, `temperature=0.0`, `seed=42`
-- `--warmup 1`, `-r 3` (3 measured runs after 1 warmup; pass `--no-warmup`
+- `--warmup 1`, `-r 5` (5 measured runs after 1 warmup; pass `--no-warmup`
   to skip warmup)
 - llama_cpp gets a `[warmup=i]` / `[run=i]` suffix appended to the prompt
   so the KV cache is busted between runs
@@ -156,7 +159,7 @@ Run `geniex_benchmark --help` for the full flag list.
 
 ## Markdown row shape
 
-`--output-md` (and the QDC scorecard) produce a llama-bench-aligned table:
+`--output-md` (and the QDC bench report) produce a llama-bench-aligned table:
 
 ```
 | Model     | Size    | Backend    | Device | ngl | Test       | TTFT (ms)   | Prefill (tok/s) | Decode (tok/s) |
@@ -178,21 +181,37 @@ Qwen3-0.6B-llama_cpp-npu	llama_cpp	npu	/data/local/tmp/.cache/geniex/models/bart
 Qwen3-4B-qairt-npu	qairt	npu	/data/local/tmp/.cache/geniex/models/qualcomm/Qwen3-4B-Instruct-2507
 EOF
 
-geniex_benchmark --matrix-file matrix.tsv --output-json-dir results/
+geniex-bench --matrix-file matrix.tsv --output-json-dir results/
 ```
 
 For a one-cell-per-process invocation (cold-start each time, useful as
 the reference for a customer-facing single-call workload), pass
 `--plugin / --device / -m` directly without `--matrix-file`.
 
-Models must be pre-pulled (e.g. `geniex-py pull bartowski/Qwen_Qwen3-0.6B-GGUF:Q4_0`)
-before invoking this binary — the C side does not include a model
-puller.
+Either a path or a model-manager id works in column 4; the binary calls
+`geniex_model_pull` on first use and reuses the cached copy on subsequent
+cells. Pre-pulling with `geniex-py pull ...` is still supported and skips
+the cold download.
 
-## Why no doctest? Why no model manager dependency?
+```bash
+cat > matrix.tsv <<EOF
+# cell_id<TAB>plugin<TAB>device<TAB>model_path_or_id
+Qwen3-0.6B-cpu	llama_cpp	cpu	bartowski/Qwen_Qwen3-0.6B-GGUF:Q4_0
+Qwen3-4B-qairt	qairt	npu	qualcomm/qwen3_4b
+EOF
+geniex-bench --matrix-file matrix.tsv --output-json-dir results/ \
+  --mm-data-dir ./cache --chipset qualcomm-snapdragon-x-elite
+```
+
+## Why a model-manager dependency now?
 
 The earlier `sdk/tests/` C++ doctest tree was unused in CI and overlapped
-the Python e2e suite. It is replaced by this single, dependency-free C
-example. Caching, alias resolution, and matrix orchestration stay on the
-Python side ([`bindings/python/geniex/cli.py`](../../../bindings/python/geniex/cli.py));
-the C binary stays small and exercises only the public API.
+the Python e2e suite. It was replaced by this single C example. Caching,
+alias resolution, and matrix orchestration originally stayed on the
+Python side; the QDC bench run ran `curl` / `Invoke-WebRequest` on each
+device for every model. That serial download was the slowest phase of
+the bench run and OOMed on large GGUFs on Windows. Linking the C binary
+against `libgeniex_model` and resolving column-4 model ids via
+`geniex_model_pull` collapses the device-side download to one
+multi-connection, resumable HTTPS call — and exercises the same model
+manager our Python / Go / JNI bindings ship to users.

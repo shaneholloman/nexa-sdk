@@ -43,7 +43,7 @@ type LlmCreateInput struct {
 	ModelPath     string
 	TokenizerPath string
 	Config        ModelConfig
-	PluginID      string
+	RuntimeID     string
 	DeviceID      string
 }
 
@@ -53,7 +53,7 @@ func (lci LlmCreateInput) toCPtr() *C.geniex_LlmCreateInput {
 		model_name:     cStringIfSet(lci.ModelName),
 		model_path:     cStringIfSet(lci.ModelPath),
 		tokenizer_path: cStringIfSet(lci.TokenizerPath),
-		plugin_id:      cStringIfSet(lci.PluginID),
+		plugin_id:      cStringIfSet(lci.RuntimeID),
 		device_id:      cStringIfSet(lci.DeviceID),
 	}
 	lci.Config.fillC(&cPtr.config)

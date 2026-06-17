@@ -12,19 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``geniex.get_device_list`` shape per plugin."""
+"""``geniex.get_runtime_list`` shape and contents."""
 
 from __future__ import annotations
 
 import geniex
 
 
-def test_device_list_shape_for_each_plugin(geniex_session):
-    for plugin in geniex.get_plugin_list():
-        devices = geniex.get_device_list(plugin)
-        assert isinstance(devices, list)
-        for entry in devices:
-            assert isinstance(entry, tuple) and len(entry) == 2
-            device_id, label = entry
-            assert isinstance(device_id, str) and device_id
-            assert isinstance(label, str)
+def test_runtime_list_is_non_empty_string_list(geniex_session):
+    runtimes = geniex.get_runtime_list()
+    assert isinstance(runtimes, list) and runtimes
+    for r in runtimes:
+        assert isinstance(r, str) and r
+
+
+def test_runtime_list_contains_llama_cpp(geniex_session):
+    assert 'llama_cpp' in geniex.get_runtime_list()

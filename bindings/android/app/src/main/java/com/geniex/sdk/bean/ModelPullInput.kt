@@ -10,8 +10,8 @@ package com.geniex.sdk.bean
 data class ModelPullInput(
     /** "org/repo" or a short alias (see [resolveAlias]). */
     val model_name: String,
-    /** Quantization hint (e.g. "Q4_K_M"). `null` lets the SDK pick. */
-    val quant: String? = null,
+    /** Precision hint (e.g. "Q4_K_M"). `null` lets the SDK pick. */
+    val precision: String? = null,
     /** Source hub. [HubSource.AUTO] routes by model name. */
     val hub: HubSource = HubSource.AUTO,
     /** Required only when [hub] is [HubSource.LOCALFS]. */

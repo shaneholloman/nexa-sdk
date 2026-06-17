@@ -58,6 +58,11 @@ var (
 	ErrCommonModelLoad              = SDKError(C.GENIEX_ERROR_COMMON_MODEL_LOAD)
 	ErrCommonPluginLoad             = SDKError(C.GENIEX_ERROR_COMMON_PLUGIN_LOAD)
 	ErrCommonPluginInvalid          = SDKError(C.GENIEX_ERROR_COMMON_PLUGIN_INVALID)
+	ErrCommonNetwork                = SDKError(C.GENIEX_ERROR_COMMON_NETWORK)
+	ErrCommonAuth                   = SDKError(C.GENIEX_ERROR_COMMON_AUTH)
+	ErrCommonHubModelNotFound       = SDKError(C.GENIEX_ERROR_COMMON_HUB_MODEL_NOT_FOUND)
+	ErrCommonRateLimited            = SDKError(C.GENIEX_ERROR_COMMON_RATE_LIMITED)
+	ErrCommonHubServer              = SDKError(C.GENIEX_ERROR_COMMON_HUB_SERVER)
 	ErrLlmTokenizationContextLength = SDKError(C.GENIEX_ERROR_LLM_TOKENIZATION_CONTEXT_LENGTH)
 )
 
@@ -90,49 +95,49 @@ func GetPluginVersion(pluginID string) string {
 	return C.GoString(C.geniex_get_plugin_version(cID))
 }
 
-type GetPluginListOutput struct {
-	PluginIDs []string
+type GetRuntimeListOutput struct {
+	RuntimeIDs []string
 }
 
-func newGetPluginListOutputFromCPtr(c *C.geniex_GetPluginListOutput) GetPluginListOutput {
+func newGetRuntimeListOutputFromCPtr(c *C.geniex_GetPluginListOutput) GetRuntimeListOutput {
 	if c == nil {
-		return GetPluginListOutput{}
+		return GetRuntimeListOutput{}
 	}
-	return GetPluginListOutput{
-		PluginIDs: cCharArrayToSlice((**C.char)(unsafe.Pointer(c.plugin_ids)), c.plugin_count),
+	return GetRuntimeListOutput{
+		RuntimeIDs: cCharArrayToSlice((**C.char)(unsafe.Pointer(c.plugin_ids)), c.plugin_count),
 	}
 }
 
-func freeGetPluginListOutput(c *C.geniex_GetPluginListOutput) {
+func freeGetRuntimeListOutput(c *C.geniex_GetPluginListOutput) {
 	if c == nil {
 		return
 	}
 	mlFreeCCharArray((**C.char)(unsafe.Pointer(c.plugin_ids)), c.plugin_count)
 }
 
-func GetPluginList() (*GetPluginListOutput, error) {
+func GetRuntimeList() (*GetRuntimeListOutput, error) {
 	var cOutput C.geniex_GetPluginListOutput
 	res := C.geniex_get_plugin_list(&cOutput)
 	if res < 0 {
 		return nil, SDKError(res)
 	}
-	defer freeGetPluginListOutput(&cOutput)
+	defer freeGetRuntimeListOutput(&cOutput)
 
-	output := newGetPluginListOutputFromCPtr(&cOutput)
+	output := newGetRuntimeListOutputFromCPtr(&cOutput)
 	return &output, nil
 }
 
-type GetDeviceListInput struct {
-	PluginID string
+type GetComputeUnitListInput struct {
+	RuntimeID string
 }
 
-func (gdli GetDeviceListInput) toCPtr() *C.geniex_GetDeviceListInput {
+func (gculi GetComputeUnitListInput) toCPtr() *C.geniex_GetDeviceListInput {
 	cPtr := (*C.geniex_GetDeviceListInput)(cMalloc(C.sizeof_geniex_GetDeviceListInput))
-	*cPtr = C.geniex_GetDeviceListInput{plugin_id: cStringIfSet(gdli.PluginID)}
+	*cPtr = C.geniex_GetDeviceListInput{plugin_id: cStringIfSet(gculi.RuntimeID)}
 	return cPtr
 }
 
-func freeGetDeviceListInput(cPtr *C.geniex_GetDeviceListInput) {
+func freeGetComputeUnitListInput(cPtr *C.geniex_GetDeviceListInput) {
 	if cPtr == nil {
 		return
 	}
@@ -140,35 +145,35 @@ func freeGetDeviceListInput(cPtr *C.geniex_GetDeviceListInput) {
 	C.free(unsafe.Pointer(cPtr))
 }
 
-type Device struct {
+type ComputeUnit struct {
 	ID   string
 	Name string
 }
 
-type GetDeviceListOutput struct {
-	Devices []Device
+type GetComputeUnitListOutput struct {
+	ComputeUnits []ComputeUnit
 }
 
-func newGetDeviceListOutputFromCPtr(c *C.geniex_GetDeviceListOutput) GetDeviceListOutput {
+func newGetComputeUnitListOutputFromCPtr(c *C.geniex_GetDeviceListOutput) GetComputeUnitListOutput {
 	if c == nil {
-		return GetDeviceListOutput{}
+		return GetComputeUnitListOutput{}
 	}
 	count := int(c.device_count)
-	devices := make([]Device, count)
+	units := make([]ComputeUnit, count)
 	if count > 0 {
 		ids := unsafe.Slice(c.device_ids, count)
 		names := unsafe.Slice(c.device_names, count)
-		for i := range devices {
-			devices[i] = Device{
+		for i := range units {
+			units[i] = ComputeUnit{
 				ID:   C.GoString(ids[i]),
 				Name: C.GoString(names[i]),
 			}
 		}
 	}
-	return GetDeviceListOutput{Devices: devices}
+	return GetComputeUnitListOutput{ComputeUnits: units}
 }
 
-func freeGetDeviceListOutput(c *C.geniex_GetDeviceListOutput) {
+func freeGetComputeUnitListOutput(c *C.geniex_GetDeviceListOutput) {
 	if c == nil {
 		return
 	}
@@ -180,18 +185,18 @@ func freeGetDeviceListOutput(c *C.geniex_GetDeviceListOutput) {
 	}
 }
 
-func GetDeviceList(input GetDeviceListInput) (*GetDeviceListOutput, error) {
+func GetComputeUnitList(input GetComputeUnitListInput) (*GetComputeUnitListOutput, error) {
 	cInput := input.toCPtr()
-	defer freeGetDeviceListInput(cInput)
+	defer freeGetComputeUnitListInput(cInput)
 
 	var cOutput C.geniex_GetDeviceListOutput
 	res := C.geniex_get_device_list(cInput, &cOutput)
 	if res < 0 {
 		return nil, SDKError(res)
 	}
-	defer freeGetDeviceListOutput(&cOutput)
+	defer freeGetComputeUnitListOutput(&cOutput)
 
-	output := newGetDeviceListOutputFromCPtr(&cOutput)
+	output := newGetComputeUnitListOutputFromCPtr(&cOutput)
 	return &output, nil
 }
 

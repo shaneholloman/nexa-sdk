@@ -36,7 +36,7 @@ type VlmCreateInput struct {
 	MmprojPath    string
 	TokenizerPath string
 	Config        ModelConfig
-	PluginID      string
+	RuntimeID     string
 	DeviceID      string
 }
 
@@ -47,7 +47,7 @@ func (vci VlmCreateInput) toCPtr() *C.geniex_VlmCreateInput {
 		model_path:     cStringIfSet(vci.ModelPath),
 		mmproj_path:    cStringIfSet(vci.MmprojPath),
 		tokenizer_path: cStringIfSet(vci.TokenizerPath),
-		plugin_id:      cStringIfSet(vci.PluginID),
+		plugin_id:      cStringIfSet(vci.RuntimeID),
 		device_id:      cStringIfSet(vci.DeviceID),
 	}
 	vci.Config.fillC(&cPtr.config)

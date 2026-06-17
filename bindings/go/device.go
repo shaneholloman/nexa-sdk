@@ -27,36 +27,36 @@ import (
 
 // LCOV_EXCL_START
 
-// Friendly device aliases that downstream callers pass on their
-// `--device` / `device_map` option. The SDK (`sdk/src/device.cpp`)
+// Friendly compute-unit aliases that downstream callers pass on their
+// `--compute` / `device_map` option. The SDK (`sdk/src/device.cpp`)
 // owns the alias table; this file is just the Go-side thin wrapper.
 const (
-	DeviceCPU    = "cpu"
-	DeviceGPU    = "gpu"
-	DeviceNPU    = "npu"
-	DeviceHybrid = "hybrid"
+	ComputeUnitCPU    = "cpu"
+	ComputeUnitGPU    = "gpu"
+	ComputeUnitNPU    = "npu"
+	ComputeUnitHybrid = "hybrid"
 )
 
-// Plugin IDs. Kept here so CLI / pybind / android agree on the strings
-// the SDK plugin registry uses.
+// Runtime IDs. Kept here so CLI / pybind / android agree on the strings
+// the SDK runtime registry uses.
 const (
-	PluginLlamaCpp = "llama_cpp"
-	PluginQairt    = "qairt"
+	RuntimeLlamaCpp = "llama_cpp"
+	RuntimeQairt    = "qairt"
 )
 
 type ResolveDeviceInput struct {
-	PluginID   string
-	ModelName  string
-	Mode       string
-	NglDefault int32
+	RuntimeID   string
+	ModelName   string
+	ComputeUnit string
+	NglDefault  int32
 }
 
 func (rdi ResolveDeviceInput) toCPtr() *C.geniex_ResolveDeviceInput {
 	cPtr := (*C.geniex_ResolveDeviceInput)(cMalloc(C.sizeof_geniex_ResolveDeviceInput))
 	*cPtr = C.geniex_ResolveDeviceInput{
-		plugin_id:   cStringIfSet(rdi.PluginID),
+		plugin_id:   cStringIfSet(rdi.RuntimeID),
 		model_name:  cStringIfSet(rdi.ModelName),
-		mode:        cStringIfSet(rdi.Mode),
+		mode:        cStringIfSet(rdi.ComputeUnit),
 		ngl_default: C.int32_t(rdi.NglDefault),
 	}
 	return cPtr
@@ -101,16 +101,16 @@ func freeResolveDeviceOutput(c *C.geniex_ResolveDeviceOutput) {
 	}
 }
 
-// ResolveDevice maps a (PluginID, ModelName, Mode) triple onto the concrete
-// (DeviceID, Ngl) pair the plugins expect. See `geniex_resolve_device` in
-// the C API for alias semantics — the SDK is the single source of truth.
+// ResolveDevice maps a (RuntimeID, ModelName, ComputeUnit) triple onto the
+// concrete (DeviceID, Ngl) pair the runtimes expect. See `geniex_resolve_device`
+// in the C API for alias semantics — the SDK is the single source of truth.
 //
 // ModelName may be empty if the caller doesn't know it; it's only consulted
 // for model-specific default overrides (e.g. llama_cpp gpt-oss → npu).
 //
-// A non-nil error means Mode was a non-empty unknown alias; the SDK returned
-// GENIEX_ERROR_COMMON_INVALID_DEVICE. Warning is non-empty when the alias
-// was coerced (e.g. qairt ↦ NPU regardless of user input).
+// A non-nil error means ComputeUnit was a non-empty unknown alias; the SDK
+// returned GENIEX_ERROR_COMMON_INVALID_DEVICE. Warning is non-empty when the
+// alias was coerced (e.g. qairt ↦ NPU regardless of user input).
 func ResolveDevice(input ResolveDeviceInput) (*ResolveDeviceOutput, error) {
 	cInput := input.toCPtr()
 	defer freeResolveDeviceInput(cInput)
@@ -119,7 +119,7 @@ func ResolveDevice(input ResolveDeviceInput) (*ResolveDeviceOutput, error) {
 	res := C.geniex_resolve_device(cInput, &cOutput)
 	if res != C.GENIEX_SUCCESS {
 		if res == C.GENIEX_ERROR_COMMON_INVALID_DEVICE {
-			return nil, fmt.Errorf("invalid device %q, must be one of: cpu, gpu, npu, hybrid", input.Mode)
+			return nil, fmt.Errorf("invalid compute unit %q, must be one of: cpu, gpu, npu, hybrid", input.ComputeUnit)
 		}
 		return nil, SDKError(res)
 	}

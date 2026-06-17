@@ -26,12 +26,12 @@ import (
 // Known configuration keys. The set is intentionally small and explicit so
 // that invalid keys can be rejected at the CLI boundary.
 const (
-	ConfigKeyDevice = "device"
+	ConfigKeyChipset = "chipset"
 )
 
 // ConfigKeys is the list of all known configuration keys.
 var ConfigKeys = []string{
-	ConfigKeyDevice,
+	ConfigKeyChipset,
 }
 
 const configFileName = "config.json"

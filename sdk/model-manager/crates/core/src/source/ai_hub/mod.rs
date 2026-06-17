@@ -25,7 +25,7 @@ use crate::manifest::{ModelFileInfo, ModelManifest, ModelType};
 use crate::transport::{HttpTransport, ReqwestTransport};
 
 use self::manifest::{
-    InfoJson, ManifestModelEntry, ModelReleaseAssets, PlatformInfo, ReleaseManifest,
+    ChipsetInfo, InfoJson, ManifestModelEntry, ModelReleaseAssets, PlatformInfo, ReleaseManifest,
 };
 use self::remote_zip::{fetch_central_directory, Method, ZipEntry};
 use self::selector::{match_asset, UnavailableChipset};
@@ -65,6 +65,49 @@ impl AiHubConfig {
             skip_cache,
         }
     }
+}
+
+/// Fetch and parse `platform.json` (the chipset catalogue) for `cfg`,
+/// honouring the on-disk 24h cache. Shared by `AiHubSource::plan` and
+/// [`list_supported_chipsets`].
+async fn fetch_platform_info(
+    cfg: &AiHubConfig,
+    transport: &Arc<dyn HttpTransport>,
+) -> Result<PlatformInfo> {
+    let platform_url = format!(
+        "{}/releases/{}/{PLATFORM_FILENAME}",
+        cfg.endpoint, cfg.version
+    );
+    let platform_cache = cfg.cache_dir.join(PLATFORM_FILENAME);
+    let platform_bytes =
+        fetch_with_cache(&platform_url, &platform_cache, cfg.skip_cache, transport).await?;
+    serde_json::from_slice(&platform_bytes).map_err(|source| Error::ManifestParse {
+        what: "platform.json",
+        source,
+    })
+}
+
+/// List every chipset AI Hub publishes assets for, with its canonical
+/// name and aliases. Sourced from `platform.json`. Sorted by the name
+/// callers display (reference device, falling back to the canonical id)
+/// so the FFI list is stable regardless of bucket ordering.
+pub async fn list_supported_chipsets(cfg: &AiHubConfig) -> Result<Vec<ChipsetInfo>> {
+    let transport: Arc<dyn HttpTransport> = Arc::new(ReqwestTransport::new()?);
+    let mut chipsets = fetch_platform_info(cfg, &transport).await?.chipsets;
+    chipsets.sort_by(|a, b| {
+        let an = if a.reference_device.is_empty() {
+            &a.name
+        } else {
+            &a.reference_device
+        };
+        let bn = if b.reference_device.is_empty() {
+            &b.name
+        } else {
+            &b.reference_device
+        };
+        an.to_ascii_lowercase().cmp(&bn.to_ascii_lowercase())
+    });
+    Ok(chipsets)
 }
 
 pub struct AiHubSource {
@@ -154,20 +197,7 @@ impl ModelSource for AiHubSource {
                 source,
             })?;
 
-        let platform_url = format!("{endpoint}/releases/{version}/{PLATFORM_FILENAME}");
-        let platform_cache = self.cfg.cache_dir.join(PLATFORM_FILENAME);
-        let platform_bytes = fetch_with_cache(
-            &platform_url,
-            &platform_cache,
-            self.cfg.skip_cache,
-            &self.transport,
-        )
-        .await?;
-        let platform: PlatformInfo =
-            serde_json::from_slice(&platform_bytes).map_err(|source| Error::ManifestParse {
-                what: "platform.json",
-                source,
-            })?;
+        let platform = fetch_platform_info(&self.cfg, &self.transport).await?;
 
         let chipset: String = if self.cfg.chipset.is_empty() {
             detect::detect_host_chipset().ok_or_else(|| {
@@ -220,7 +250,13 @@ impl ModelSource for AiHubSource {
             .unwrap_or(&asset.precision)
             .to_string();
 
-        let total_uncompressed: u64 = flat_entries.iter().map(|(_, e)| e.uncompressed_size).sum();
+        // Each bucket holds a single file's own size — sibling sizes live in
+        // extra_files. Aggregating here would double-count via total_size().
+        let entrypoint_size = flat_entries
+            .iter()
+            .find(|(name, _)| name == &entrypoint_name)
+            .map(|(_, e)| e.uncompressed_size as i64)
+            .unwrap_or(0);
 
         let mut model_file: HashMap<String, ModelFileInfo> = HashMap::new();
         model_file.insert(
@@ -228,7 +264,7 @@ impl ModelSource for AiHubSource {
             ModelFileInfo {
                 name: entrypoint_name.clone(),
                 downloaded: true,
-                size: total_uncompressed as i64,
+                size: entrypoint_size,
             },
         );
         let extra_files: Vec<ModelFileInfo> = flat_entries

@@ -141,7 +141,7 @@ func keepAliveGet[T any](name string, param types.ModelParam, reset bool) (any, 
 	// TODO: Remove this resolution once the C API exposes geniex_get_last_error_detail()
 	// and the plugin can report the exact unsupported param name directly.
 	nctx, ngl := param.NCtx, param.NGpuLayers
-	if paths.PluginID == geniex_sdk.PluginLlamaCpp {
+	if paths.RuntimeID == geniex_sdk.RuntimeLlamaCpp {
 		if nctx == 0 {
 			nctx = 4096
 		}
@@ -161,7 +161,7 @@ func keepAliveGet[T any](name string, param types.ModelParam, reset bool) (any, 
 				NCtx:       nctx,
 				NGpuLayers: ngl,
 			},
-			PluginID: paths.PluginID,
+			RuntimeID: paths.RuntimeID,
 		})
 	case reflect.TypeFor[geniex_sdk.VLM]():
 		t, e = geniex_sdk.NewVLM(geniex_sdk.VlmCreateInput{
@@ -172,7 +172,7 @@ func keepAliveGet[T any](name string, param types.ModelParam, reset bool) (any, 
 				NCtx:       nctx,
 				NGpuLayers: ngl,
 			},
-			PluginID: paths.PluginID,
+			RuntimeID: paths.RuntimeID,
 		})
 	default:
 		return nil, fmt.Errorf("unsupported model type: %s", reflect.TypeFor[T]())

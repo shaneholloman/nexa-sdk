@@ -48,7 +48,7 @@ var (
 	tokenFile      string
 	input          string
 	systemPrompt   string
-	device         string
+	computeUnit    string
 
 	// sampler config
 	temperature       float32
@@ -85,7 +85,7 @@ var (
 	llmFlags = func() *pflag.FlagSet {
 		llmFlags := pflag.NewFlagSet("LLM/VLM Model", pflag.ExitOnError)
 		llmFlags.SortFlags = false
-		llmFlags.StringVarP(&device, "device", "d", "", "device to run on: cpu, gpu, npu, or hybrid (default: hybrid for llama.cpp, npu for qairt)")
+		llmFlags.StringVarP(&computeUnit, "compute", "c", "", "compute unit to run on: cpu, gpu, npu, or hybrid (default: hybrid for llama_cpp, npu for qairt)")
 		llmFlags.Int32VarP(&ngl, "ngl", "n", 0, "number of layers to offload to gpu/npu (llama_cpp only, default 999)")
 		llmFlags.Int32VarP(&nctx, "nctx", "", 0, "context window size (llama_cpp only, default 4096)")
 		llmFlags.Int32VarP(&maxTokens, "max-tokens", "", 2048, "max tokens")
@@ -126,9 +126,9 @@ func infer() *cobra.Command {
 	inferCmd.SetUsageFunc(flagGroupedUsage)
 
 	inferCmd.RunE = func(cmd *cobra.Command, args []string) error {
-		name, quant := geniex_sdk.SplitNameQuant(args[0])
+		name, precision := geniex_sdk.SplitNamePrecision(args[0])
 
-		paths, err := ensureModelAvailable(cmd.Context(), name, quant)
+		paths, err := ensureModelAvailable(cmd.Context(), name, precision)
 		if err != nil {
 			return err
 		}
@@ -147,7 +147,7 @@ func infer() *cobra.Command {
 
 		geniex_sdk.DeInit()
 		if errors.Is(err, geniex_sdk.ErrCommonParamNotSupported) {
-			err = fmt.Errorf("plugin %s: %w", paths.PluginID, err)
+			err = fmt.Errorf("runtime %s: %w", paths.RuntimeID, err)
 		}
 		return err
 	}
@@ -219,14 +219,14 @@ func loadStopSequences() ([]string, error) {
 	return stopSequences, nil
 }
 
-// resolveModelParams resolves --device / --ngl / --nctx into the
+// resolveModelParams resolves --compute / --ngl / --nctx into the
 // (device_id, ngl, nctx) triple the SDK expects. For llama_cpp, unset
-// --ngl / --nctx fall back to 999 / 4096; other plugins keep 0 so their
-// param-guard isn't tripped by the flag default. Device alias mapping
+// --ngl / --nctx fall back to 999 / 4096; other runtimes keep 0 so their
+// param-guard isn't tripped by the flag default. Compute-unit alias mapping
 // is delegated to geniex_resolve_device (sdk/src/device.cpp).
-func resolveModelParams(pluginID, modelName string) (deviceID string, resolvedNgl, resolvedNctx int32, err error) {
+func resolveModelParams(runtimeID, modelName string) (deviceID string, resolvedNgl, resolvedNctx int32, err error) {
 	resolvedNgl, resolvedNctx = ngl, nctx
-	if pluginID == geniex_sdk.PluginLlamaCpp {
+	if runtimeID == geniex_sdk.RuntimeLlamaCpp {
 		if !llmFlags.Changed("ngl") {
 			resolvedNgl = 999
 		}
@@ -236,10 +236,10 @@ func resolveModelParams(pluginID, modelName string) (deviceID string, resolvedNg
 	}
 
 	resolved, err := geniex_sdk.ResolveDevice(geniex_sdk.ResolveDeviceInput{
-		PluginID:   pluginID,
-		ModelName:  modelName,
-		Mode:       device,
-		NglDefault: resolvedNgl,
+		RuntimeID:   runtimeID,
+		ModelName:   modelName,
+		ComputeUnit: computeUnit,
+		NglDefault:  resolvedNgl,
 	})
 	if err != nil {
 		return
@@ -271,7 +271,7 @@ func inferLLM(paths *geniex_sdk.ModelPaths) error {
 		return err
 	}
 
-	deviceID, nglResolved, nctxResolved, err := resolveModelParams(paths.PluginID, paths.ModelName)
+	deviceID, nglResolved, nctxResolved, err := resolveModelParams(paths.RuntimeID, paths.ModelName)
 	if err != nil {
 		return err
 	}
@@ -282,7 +282,7 @@ func inferLLM(paths *geniex_sdk.ModelPaths) error {
 	p, err := geniex_sdk.NewLLM(geniex_sdk.LlmCreateInput{
 		ModelName: paths.ModelName,
 		ModelPath: paths.ModelPath,
-		PluginID:  paths.PluginID,
+		RuntimeID: paths.RuntimeID,
 		DeviceID:  deviceID,
 		Config: geniex_sdk.ModelConfig{
 			NCtx:       nctxResolved,
@@ -424,7 +424,7 @@ func inferVLM(paths *geniex_sdk.ModelPaths) error {
 		return err
 	}
 
-	deviceID, nglResolved, nctxResolved, err := resolveModelParams(paths.PluginID, paths.ModelName)
+	deviceID, nglResolved, nctxResolved, err := resolveModelParams(paths.RuntimeID, paths.ModelName)
 	if err != nil {
 		return err
 	}
@@ -435,7 +435,7 @@ func inferVLM(paths *geniex_sdk.ModelPaths) error {
 		ModelName:  paths.ModelName,
 		ModelPath:  paths.ModelPath,
 		MmprojPath: paths.MmprojPath,
-		PluginID:   paths.PluginID,
+		RuntimeID:  paths.RuntimeID,
 		DeviceID:   deviceID,
 		Config: geniex_sdk.ModelConfig{
 			NCtx:       nctxResolved,

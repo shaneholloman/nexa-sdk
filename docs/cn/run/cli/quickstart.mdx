@@ -8,12 +8,12 @@ import Feedback from "/snippets/page-feedback.mdx";
 ## **前置条件**
 
 - 已安装 CLI——详见[安装](/cn/run/cli/install)。
-- 容器内交互式 shell（仅 Docker）——详见[交互式运行](/cn/run/cli/install#交互式运行)。
-- 了解[运行时选择](/cn/get-started/platforms#geniex-运行时)——`qairt` 用于 AI Hub 模型包，`llama_cpp` 用于任意 GGUF。
+- 容器内交互式 shell（仅 Docker）——详见[交互式运行](/cn/run/linux/install#交互式运行)。
+- 了解[运行时选择](/cn/get-started/platforms#geniex-运行时)——`qairt`（Qualcomm AI Engine Direct）用于 Qualcomm AI Hub 模型，`llama_cpp` 用于任意 GGUF。
 
 ## **运行你的第一个模型**
 
-### **QAIRT 运行时（AI Hub）**
+### **Qualcomm AI Engine Direct 运行时（Qualcomm AI Hub）**
 
 **语言模型：**
 
@@ -29,7 +29,7 @@ geniex infer ai-hub-models/Qwen2.5-VL-7B-Instruct
 
 ### **llama.cpp 运行时（GGUF）**
 
-系统提示量化时请选择 `Q4_0`——它在 Hexagon NPU 上支持最佳。
+系统提示时请选择 `Q4_0`——它在 Hexagon NPU 上支持最佳。
 
 **语言模型：**
 
@@ -44,10 +44,60 @@ geniex infer Qwen/Qwen3-VL-2B-Instruct-GGUF
 ```
 
 系统提示时请选择：
-- **模型类型** —— 视觉语言模型选 `vlm`，纯文本模型选 `llm`。`Qwen3.5` 与 `Gemma4` 目前请选 `llm`（多模态支持即将推出）。
-- **量化** —— `Q4_0` 在 Hexagon NPU 上性能最佳。
+- **模型类型**——视觉语言模型选 `vlm`，纯文本模型选 `llm`。`Qwen3.5` 与 `Gemma4` 目前请选 `llm`（多模态支持即将推出）。
+- **精度（量化）**——`Q4_0` 在 Hexagon NPU 上性能最佳。
 
 <Tip>如需尝试其他 GGUF 模型，从 Hugging Face 复制任意兼容 GGUF 路径替换上面的命令即可。详见[运行 Hugging Face 上的 GGUF 模型](/cn/models/supported#运行-hugging-face-上的-gguf-模型)。</Tip>
+
+## **运行本地模型**
+
+已有模型文件在本地？使用 `geniex pull` 配合 `--local-path` 注册到缓存，然后像其他模型一样运行。
+
+### **本地 GGUF 文件**
+
+将 `--local-path` 指向包含 `.gguf` 文件的目录：
+
+<CodeGroup>
+```powershell windows
+geniex pull local/my-model --local-path C:\models\my-model
+geniex infer local/my-model
+```
+
+```bash linux
+geniex pull local/my-model --local-path /home/user/models/my-model
+geniex infer local/my-model
+```
+</CodeGroup>
+
+### **本地 QAIRT 模型包**
+
+将 `--local-path` 指向已解压的模型包目录（包含 `.bin` 分片和 `metadata.json`）：
+
+<CodeGroup>
+```powershell windows
+geniex pull local/my-bundle --local-path C:\models\my-bundle
+geniex infer local/my-bundle
+```
+
+```bash linux
+geniex pull local/my-bundle --local-path /home/user/models/my-bundle
+geniex infer local/my-bundle
+```
+</CodeGroup>
+
+也可以直接从 AI Hub `.zip` 压缩包拉取，无需先解压：
+
+<CodeGroup>
+```powershell windows
+geniex pull local/my-bundle --local-path C:\downloads\model.zip
+```
+
+```bash linux
+geniex pull local/my-bundle --local-path /home/user/downloads/model.zip
+```
+</CodeGroup>
+
+<Note>`geniex pull` 会将模型文件复制到本地缓存。拉取成功后，可以安全删除原始文件以避免保留两份副本。使用 `geniex list` 确认模型已缓存。</Note>
 
 ## **下一步**
 

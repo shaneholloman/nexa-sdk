@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Run geniex_benchmark on a QDC device and render a scorecard.
+"""Run geniex-bench on a QDC device and render a bench report.
 
 Builds an artifact (SDK pkg + entry script), submits it as a QDC job, downloads
-the per-cell JSON geniex_benchmark emits, and writes a markdown scorecard to
+the per-cell JSON geniex-bench emits, and writes a markdown bench report to
 GITHUB_STEP_SUMMARY. Linux (QCS9075M, BASH), Windows (SC8380XP, PowerShell), and
 Android (SM8850, APPIUM via adb) are implemented.
 """
@@ -47,15 +47,23 @@ log = logging.getLogger(__name__)
 
 HERE = Path(__file__).parent
 
-AIHUB_BASE = "https://qaihub-public-assets.s3.us-west-2.amazonaws.com/qai-hub-models"
-AIHUB_VERSION = "v0.52.0"
+# release_assets.json is published per model on the qualcomm HuggingFace org;
+# the download_url values inside it point at the qaihub-public-assets S3 bucket.
+HF_BASE = "https://huggingface.co/qualcomm"
+# Default precision for qairt release_assets.json lookups.
+AIHUB_PRECISION = "w4a16"
 # Staged into every artifact and fed to VLM cells; reuses the committed VLM
 # e2e fixture (tests/conftest.py TEST_IMAGE_PATH).
 TEST_IMAGE = HERE.parents[2] / "cli" / "server" / "docs" / "ui" / "favicon-32x32.png"
+# QDC device code -> AI Hub chipset slug (the keys under
+# precisions.<precision>.chipset_assets in release_assets.json).
 CHIPSET = {
+    "QCS8275": "qualcomm-qcs8275",
     "QCS9075M": "qualcomm-qcs9075",
     "SC8380XP": "qualcomm-snapdragon-x-elite",
     "SC8480XP": "qualcomm-snapdragon-x2-elite",
+    "X1P42100": "qualcomm-snapdragon-x-plus-8-core",
+    "SM8650": "qualcomm-snapdragon-8gen3",
     "SM8750": "qualcomm-snapdragon-8-elite",
     "SM8850": "qualcomm-snapdragon-8-elite-gen5",
 }
@@ -71,37 +79,79 @@ def platform_for(device: str) -> str:
     raise SystemExit(f"unknown device chipset: {device}")
 
 
-def resolve_bundle_url(aihub_id: str, device: str) -> str | None:
+def _resolve_aihub_url(m: dict, device: str) -> str | None:
+    """Resolve a qairt genie bundle download URL from a model's
+    release_assets.json, published on the qualcomm HuggingFace org.
+
+    Reads the current schema:
+        precisions.<precision>.chipset_assets.<slug>.genie.download_url
+
+    The returned URL points at the qaihub-public-assets S3 bucket. Used only
+    for the host-side bench report / chipset probe — the device-side mm pull
+    does the actual download via the model's "qualcomm/<id>" alias."""
     slug = CHIPSET.get(device)
     if slug is None:
-        raise SystemExit(f"no chipset slug for {device}")
-    url = f"{AIHUB_BASE}/models/{aihub_id}/releases/{AIHUB_VERSION}/release-assets.json"
+        return None
+    hf_repo = m.get("hf_repo")
+    if not hf_repo:
+        raise SystemExit(f"{m.get('name')}: missing hf_repo for aihub model")
+    url = f"{HF_BASE}/{hf_repo}/resolve/main/release_assets.json"
     with urllib.request.urlopen(url) as r:
-        assets = json.load(r).get("assets", [])
-    return next((a["download_url"] for a in assets if a.get("chipset") == slug), None)
+        doc = json.load(r)
+    precision = m.get("precision", AIHUB_PRECISION)
+    chipset_assets = (
+        doc.get("precisions", {}).get(precision, {}).get("chipset_assets", {})
+    )
+    asset = chipset_assets.get(slug)
+    if not asset:
+        return None
+    return asset.get("genie", {}).get("download_url")
 
 
-def resolve_model_url(m: dict, device: str) -> tuple[str | None, str]:
-    """Return (download_url, kind) for a model entry; url is None when no
-    asset matches the device (QAIRT bundles only)."""
-    if "aihub_id" in m:
-        return resolve_bundle_url(m["aihub_id"], device), "bundle"
-    return m["url"], "gguf"
+def _aihub_chipset_supported(m: dict, device: str) -> bool:
+    """Probe AI Hub's release manifest to confirm the model advertises an
+    asset for `device`'s chipset slug. Cheap (single JSON over HTTPS) and
+    keeps us from emitting a row that the device-side mm pull would just
+    error on, which is the only behaviour the host can know up front."""
+    if CHIPSET.get(device) is None:
+        raise SystemExit(f"no chipset slug for {device}")
+    return _resolve_aihub_url(m, device) is not None
+
+
+def resolve_model_url(m: dict, device: str) -> str | None:
+    """Best-effort public download URL for the bench report `Build & models`
+    block. None when no asset matches (QAIRT bundles on unsupported chipsets).
+    Not used for the actual download — the device-side mm pull does that."""
+    if m.get("hub") == "aihub":
+        return _resolve_aihub_url(m, device)
+    return m.get("url")
 
 
 def model_rows(models: list[dict], device: str) -> list[str]:
+    """One pipe-delimited row per model, consumed by the device-side run
+    scripts. Schema:
+
+        name | plugin | csv_devices | model_id | vlm | image
+
+    The host passes the chipset slug as a single shared --chipset flag to
+    geniex-bench; the model-manager hub auto-routes "qualcomm/*" to
+    AI Hub and everything else to HuggingFace, so per-row hub overrides
+    aren't needed. mmproj/tokenizer paths come back from get_paths.
+
+    Rows for AI Hub models whose chipset isn't advertised are dropped
+    upfront so the device doesn't waste time on a guaranteed-fail pull."""
     rows = []
     for m in models:
-        url, kind = resolve_model_url(m, device)
-        if url is None:
+        if "model_id" not in m:
+            raise SystemExit(f"{m['name']}: missing model_id in bench-models.json")
+        if m.get("hub") == "aihub" and not _aihub_chipset_supported(m, device):
             log.warning("no %s asset for %s, skipping", device, m["name"])
             continue
-        mmproj = m.get("mmproj_url", "")
         vlm = "1" if m.get("vlm") else ""
         image = "1" if m.get("image") else ""
         rows.append(
-            f"{m['name']}|{m['plugin']}|{','.join(m['devices'])}|{url}|{kind}"
-            f"|{mmproj}|{vlm}|{image}"
+            f"{m['name']}|{m['plugin']}|{','.join(m['devices'])}|{m['model_id']}"
+            f"|{vlm}|{image}"
         )
     return rows
 
@@ -116,6 +166,7 @@ def build_linux_artifact(
         (HERE / "linux" / "run_linux.sh")
         .read_text()
         .replace("{MODELS}", "\n".join(model_rows(models, device)))
+        .replace("{CHIPSET}", CHIPSET.get(device, ""))
     )
     script_path = stage / "run_linux.sh"
     script_path.write_text(script, newline="\n")
@@ -137,6 +188,7 @@ def build_windows_artifact(
         (HERE / "windows" / "run_windows.ps1")
         .read_text()
         .replace("{MODELS}", "\n".join(model_rows(models, device)))
+        .replace("{CHIPSET}", CHIPSET.get(device, ""))
     )
     (stage / "run_windows.ps1").write_text(script, newline="\r\n")
 
@@ -153,7 +205,7 @@ def build_android_artifact(
     pkg_dir: Path, models: list[dict], device: str, tmp: Path
 ) -> Path:
     # Phones lack python3/curl, so the appium pytest harness on the QDC host
-    # fetches+extracts each model and adb-pushes it, then runs geniex_benchmark
+    # fetches+extracts each model and adb-pushes it, then runs geniex-bench
     # on-device; results land in the device's QDC_logs and are auto-collected.
     stage = tmp / "stage"
     shutil.copytree(pkg_dir, stage / "pkg-geniex")
@@ -170,6 +222,7 @@ def build_android_artifact(
     )
     shutil.copy(omp, stage / "pkg-geniex" / "lib" / "llama_cpp" / "libomp.so")
     (stage / "matrix_rows.txt").write_text("\n".join(model_rows(models, device)))
+    (stage / "chipset.txt").write_text(CHIPSET.get(device, ""))
     shutil.copytree(HERE / "tests", stage / "tests")
     shutil.copy(HERE / "tests" / "requirements.txt", stage / "requirements.txt")
     shutil.copy(TEST_IMAGE, stage / "test.png")
@@ -252,8 +305,8 @@ def _pick_field(cells: list[dict], key: str) -> str | None:
 def _models_block(models: list[dict], device: str) -> list[str]:
     lines = ["**Models**", ""]
     for m in models:
-        url, _ = resolve_model_url(m, device)
-        lines.append(f"- {m['name']}: {url or '-'}")
+        url = resolve_model_url(m, device)
+        lines.append(f"- {m['name']} ({m['model_id']}): {url or '-'}")
     return lines
 
 
@@ -287,7 +340,7 @@ def render(
     label: str,
     models: list[dict] | None = None,
 ) -> str:
-    lines = [f"## QDC Scorecard — {device} — {label}", ""]
+    lines = [f"## QDC Bench — {device} — {label}", ""]
     lines += _details_block(cells, device, label, models)
     lines += [
         "| Model | Backend | Device | Ctx | ngl | Test | TTFT (ms) | Prefill (tok/s) | Decode (tok/s) |",
@@ -346,7 +399,7 @@ def render_aggregate(cells_dir: Path, device: str, models_file: Path) -> int:
     label = detect_geniex_label(_short_sha())
     if not cells:
         write_summary(
-            f"## QDC Scorecard — {device} — {label}\n\nNo results recovered.\n"
+            f"## QDC Bench — {device} — {label}\n\nNo results recovered.\n"
         )
         return 0
     models = json.loads(models_file.read_text()) if models_file.exists() else None
@@ -358,7 +411,7 @@ def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--pkg-dir", type=Path)
     p.add_argument("--device", default="QCS9075M")
-    p.add_argument("--models-file", type=Path, default=HERE / "scorecard-models.json")
+    p.add_argument("--models-file", type=Path, default=HERE / "bench-models.json")
     p.add_argument("--model-name", help="run only this model from --models-file")
     p.add_argument("--cells-out", type=Path, help="write the per-cell JSON list here")
     p.add_argument("--render-dir", type=Path, help="render mode: aggregate JSON here")

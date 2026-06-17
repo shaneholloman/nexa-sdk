@@ -28,8 +28,8 @@ import Feedback from "/snippets/page-feedback.mdx";
     ```
   </Accordion>
 
-  <Accordion title="`--device cpu` or `--device gpu` errors with a Qualcomm AI Hub Model">
-    Qualcomm AI Engine Direct is NPU-only. Use `--device npu` (or omit the flag — `npu` is the default for `qairt`). To run on CPU/GPU, switch to a GGUF model on the [llama.cpp runtime](/en/get-started/platforms#llamacpp).
+  <Accordion title="`--compute cpu` or `--compute gpu` errors with a Qualcomm AI Hub Model">
+    Qualcomm AI Engine Direct is NPU-only. Use `--compute npu` (or omit the flag — `npu` is the default for `qairt`). To run on CPU/GPU, switch to a GGUF model on the [llama.cpp runtime](/en/get-started/platforms#llamacpp).
   </Accordion>
 </AccordionGroup>
 
@@ -54,14 +54,18 @@ import Feedback from "/snippets/page-feedback.mdx";
 ## **Linux**
 
 <AccordionGroup>
-  <Accordion title="`docker pull ghcr.io/...` fails with permission / unauthorized">
+  <Accordion title="`docker pull` fails with permission / unauthorized">
     Two separate things have to be right:
 
-    1. **GHCR login.** Use a GitHub Personal Access Token (classic) with at least `read:packages`, then:
+    1. **Registry login.** Log in to whichever registry you pull from:
 
        ```bash bash
+       # GitHub Container Registry — PAT (classic) with at least read:packages:
        export GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxx
        docker login ghcr.io -u <your-github-username> -p "$GITHUB_TOKEN"
+
+       # Qualcomm Container Registry:
+       docker login docker-registry.qualcomm.com -u '$app' -p GB2S6KXMJXTPV8VHNFNS7Q6LVH75LOOBTLT8D723WUX6PSFZMTX95GIQG4EFWH5C021ONZ5763VI9IDHU96Q7VAZJ2830CLX3NPI6STQOJWRYXLLA2ZYTL1S
        ```
 
        You should see `Login Succeeded`.

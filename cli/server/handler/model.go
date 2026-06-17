@@ -36,7 +36,7 @@ func ListModels(c *gin.Context) {
 	for _, m := range models {
 		for _, q := range m.Precisions {
 			id := m.Name
-			if q != geniex_sdk.QuantNA {
+			if q != geniex_sdk.PrecisionNA {
 				id += ":" + q
 			}
 			res = append(res, openai.Model{
@@ -53,7 +53,7 @@ func ListModels(c *gin.Context) {
 }
 
 func RetrieveModel(c *gin.Context) {
-	name, quant := geniex_sdk.SplitNameQuant(strings.TrimPrefix(c.Param("model"), "/"))
+	name, quant := geniex_sdk.SplitNamePrecision(strings.TrimPrefix(c.Param("model"), "/"))
 
 	models, err := geniex_sdk.ModelListDetailed()
 	if err != nil {
@@ -82,7 +82,7 @@ func RetrieveModel(c *gin.Context) {
 	}
 
 	id := name
-	if quant != geniex_sdk.QuantNA {
+	if quant != geniex_sdk.PrecisionNA {
 		id += ":" + quant
 	}
 	c.JSON(http.StatusOK, openai.Model{

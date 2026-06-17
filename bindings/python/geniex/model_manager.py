@@ -29,6 +29,7 @@ from ._ffi._types import (
     GENIEX_HUB_LOCALFS,
     GENIEX_MODEL_TYPE_LLM,
     GENIEX_MODEL_TYPE_VLM,
+    geniex_ChipsetList,
     geniex_download_progress_cb,
     geniex_ModelListDetailedOutput,
     geniex_ModelPaths,
@@ -39,7 +40,7 @@ from ._ffi._types import (
 __all__ = [
     'ModelPaths',
     'ModelDetail',
-    'QuantCandidate',
+    'PrecisionCandidate',
     'ModelQuery',
     'FileProgress',
     'ProgressCallback',
@@ -57,6 +58,9 @@ __all__ = [
     'set_type',
     'resolve_alias',
     'ensure_cached',
+    'ChipsetInfo',
+    'list_chipsets',
+    'detect_chipset',
 ]
 
 
@@ -76,7 +80,7 @@ class ModelPaths:
     model_path: str
     model_dir: str
     model_name: str
-    plugin_id: str
+    runtime: str
     model_type: str  # "llm" or "vlm"
     mmproj_path: str | None = None
     tokenizer_path: str | None = None
@@ -88,17 +92,25 @@ class ModelDetail:
 
     name: str
     model_name: str
-    plugin_id: str
+    runtime: str
     model_type: str  # "llm" or "vlm"
     total_size: int
     precisions: list[str]
 
 
 @dataclass(frozen=True)
-class QuantCandidate:
-    """One quantization advertised by a hub for a model."""
+class ChipsetInfo:
+    """One chipset Qualcomm AI Hub publishes assets for."""
 
-    quant: str
+    name: str
+    aliases: list[str]
+
+
+@dataclass(frozen=True)
+class PrecisionCandidate:
+    """One precision advertised by a hub for a model."""
+
+    precision: str
     size: int
     is_default: bool
 
@@ -108,9 +120,9 @@ class ModelQuery:
     """Result of a plan-only :func:`query`."""
 
     model_name: str
-    plugin_id: str
+    runtime: str
     model_type: str  # "llm" or "vlm"
-    candidates: list[QuantCandidate]
+    candidates: list[PrecisionCandidate]
 
 
 ProgressCallback = Callable[[list[FileProgress]], bool]
@@ -206,7 +218,7 @@ def _maybe_resolve_alias(model_name: str, quant: str | None) -> tuple[str, str |
 def pull(
     model_name: str,
     *,
-    quant: str | None = None,
+    precision: str | None = None,
     hub: str | int = 'auto',
     local_path: str | None = None,
     hf_token: str | None = None,
@@ -218,8 +230,8 @@ def pull(
     """Download a model into the local cache (blocking, resumable).
 
     Args:
-        model_name: ``org/repo``, ``org/repo:quant``, or a short alias.
-        quant: Optional quantisation hint (e.g. ``"Q4_K_M"``).
+        model_name: ``org/repo``, ``org/repo:precision``, or a short alias.
+        precision: Optional precision hint (e.g. ``"Q4_K_M"``).
         hub: ``"auto" | "hf" | "aihub" | "localfs"`` or a raw enum int.
         local_path: Required when ``hub == "localfs"``.
         hf_token: HuggingFace bearer token; falls back to ``GENIEX_HFTOKEN``.
@@ -234,7 +246,7 @@ def pull(
     _ensure_init()
     lib = load_library()
 
-    model_name, quant = _maybe_resolve_alias(model_name, quant)
+    model_name, precision = _maybe_resolve_alias(model_name, precision)
     hub_val = _resolve_hub(hub)
 
     if model_type is None:
@@ -266,7 +278,7 @@ def pull(
     inp = geniex_ModelPullInput(
         struct_size=sizeof(geniex_ModelPullInput),
         model_name=model_name.encode(),
-        quant=quant.encode() if quant else None,
+        quant=precision.encode() if precision else None,
         hub=hub_val,
         local_path=local_path.encode() if local_path else None,
         hf_token=hf_token.encode() if hf_token else None,
@@ -310,7 +322,7 @@ def list_detailed() -> list[ModelDetail]:
                 ModelDetail(
                     name=d.name.decode() if d.name else '',
                     model_name=d.model_name.decode() if d.model_name else '',
-                    plugin_id=d.plugin_id.decode() if d.plugin_id else '',
+                    runtime=d.plugin_id.decode() if d.plugin_id else '',
                     model_type=_type_str(d.model_type),
                     total_size=d.total_size,
                     precisions=[d.precisions[j].decode() for j in range(d.precision_count)],
@@ -330,7 +342,7 @@ def query(
     chipset: str | None = None,
     display_name: str | None = None,
 ) -> ModelQuery:
-    """Resolve a model's remote candidate quantizations without downloading."""
+    """Resolve a model's remote candidate precisions without downloading."""
     _ensure_init()
     lib = load_library()
 
@@ -352,8 +364,8 @@ def query(
     _check(lib.geniex_model_query(byref(inp), byref(out)))
     try:
         candidates = [
-            QuantCandidate(
-                quant=out.candidates[i].quant.decode() if out.candidates[i].quant else '',
+            PrecisionCandidate(
+                precision=out.candidates[i].quant.decode() if out.candidates[i].quant else '',
                 size=out.candidates[i].size,
                 is_default=bool(out.candidates[i].is_default),
             )
@@ -361,7 +373,7 @@ def query(
         ]
         return ModelQuery(
             model_name=out.model_name.decode() if out.model_name else '',
-            plugin_id=out.plugin_id.decode() if out.plugin_id else '',
+            runtime=out.plugin_id.decode() if out.plugin_id else '',
             model_type=_type_str(out.model_type),
             candidates=candidates,
         )
@@ -386,11 +398,11 @@ def clean() -> int:
 
 
 def get_paths(model_name: str) -> ModelPaths:
-    """Resolve ``org/repo[:quant]`` (or alias) to absolute on-disk paths."""
+    """Resolve ``org/repo[:precision]`` (or alias) to absolute on-disk paths."""
     _ensure_init()
     lib = load_library()
-    base, quant = _maybe_resolve_alias(model_name, None)
-    key = f'{base}:{quant}' if quant else base
+    base, precision = _maybe_resolve_alias(model_name, None)
+    key = f'{base}:{precision}' if precision else base
     out = geniex_ModelPaths()
     _check(lib.geniex_model_get_paths(key.encode(), byref(out)))
     try:
@@ -398,7 +410,7 @@ def get_paths(model_name: str) -> ModelPaths:
             model_path=out.model_path.decode() if out.model_path else '',
             model_dir=out.model_dir.decode() if out.model_dir else '',
             model_name=out.model_name.decode() if out.model_name else '',
-            plugin_id=out.plugin_id.decode() if out.plugin_id else '',
+            runtime=out.plugin_id.decode() if out.plugin_id else '',
             model_type=_type_str(out.model_type),
             mmproj_path=out.mmproj_path.decode() if out.mmproj_path else None,
             tokenizer_path=out.tokenizer_path.decode() if out.tokenizer_path else None,
@@ -442,10 +454,51 @@ def resolve_alias(alias: str) -> str:
         lib.geniex_free(out)
 
 
+def list_chipsets() -> list[ChipsetInfo]:
+    """List every chipset Qualcomm AI Hub supports, with aliases.
+
+    Sourced from ``platform.json`` (cached 24h); the first call may hit the network.
+    """
+    _ensure_init()
+    lib = load_library()
+    out = geniex_ChipsetList()
+    _check(lib.geniex_model_list_chipsets(byref(out)))
+    try:
+        chipsets = []
+        for i in range(out.count):
+            c = out.chipsets[i]
+            chipsets.append(
+                ChipsetInfo(
+                    name=c.name.decode() if c.name else '',
+                    aliases=[c.aliases[j].decode() for j in range(c.alias_count)],
+                )
+            )
+        return chipsets
+    finally:
+        lib.geniex_model_list_chipsets_free(byref(out))
+
+
+def detect_chipset() -> str | None:
+    """Detect the current host's chipset via a local probe (no network).
+
+    Returns ``None`` when the platform cannot be probed.
+    """
+    _ensure_init()
+    lib = load_library()
+    out = c_char_p()
+    _check(lib.geniex_model_detect_chipset(byref(out)))
+    if not out.value:
+        return None
+    try:
+        return out.value.decode()
+    finally:
+        lib.geniex_free(out)
+
+
 def ensure_cached(
     model_name_or_alias: str,
     *,
-    quant: str | None = None,
+    precision: str | None = None,
     hub: str | int = 'auto',
     local_path: str | None = None,
     hf_token: str | None = None,
@@ -456,9 +509,9 @@ def ensure_cached(
 
     name_part = model_name_or_alias
     if ':' in model_name_or_alias:
-        name_part, parsed_quant = model_name_or_alias.rsplit(':', 1)
-        if quant is None and parsed_quant:
-            quant = parsed_quant
+        name_part, parsed_precision = model_name_or_alias.rsplit(':', 1)
+        if precision is None and parsed_precision:
+            precision = parsed_precision
 
     try:
         full_name = resolve_alias(name_part)
@@ -467,11 +520,11 @@ def ensure_cached(
 
     pull(
         full_name,
-        quant=quant,
+        precision=precision,
         hub=hub,
         local_path=local_path,
         hf_token=hf_token,
         on_progress=on_progress,
     )
-    key = f'{full_name}:{quant}' if quant else full_name
+    key = f'{full_name}:{precision}' if precision else full_name
     return get_paths(key)

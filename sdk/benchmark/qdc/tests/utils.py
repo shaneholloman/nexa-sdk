@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""adb + appium helpers for the on-device scorecard run (QDC Android phones)."""
+"""adb + appium helpers for the on-device bench run (QDC Android phones)."""
 
 from __future__ import annotations
 
@@ -25,10 +25,11 @@ from appium.options.common import AppiumOptions
 # QDC extracts the artifact under /qdc/appium/ on the runner host.
 HOST_BUNDLE = "/qdc/appium/pkg-geniex"
 HOST_ROWS = "/qdc/appium/matrix_rows.txt"
+HOST_CHIPSET = "/qdc/appium/chipset.txt"
 HOST_IMAGE = "/qdc/appium/test.png"
 HOST_PROMPTS = "/qdc/appium/prompts"
 BUNDLE_PATH = "/data/local/tmp/pkg-geniex"
-MODELS_PATH = "/data/local/tmp/models"
+MM_CACHE_PATH = "/data/local/tmp/geniex-cache"
 IMAGE_PATH = "/data/local/tmp/test.png"
 PROMPTS_PATH = "/data/local/tmp/prompts"
 QDC_LOGS_PATH = "/data/local/tmp/QDC_logs"
@@ -67,7 +68,7 @@ def run_adb_command(cmd: str, *, check: bool = True) -> subprocess.CompletedProc
 def push_bundle_if_needed() -> None:
     """Push pkg-geniex to the device once, making bin/ executable."""
     check = subprocess.run(
-        ["adb", "shell", f"ls {BUNDLE_PATH}/bin/geniex_benchmark"],
+        ["adb", "shell", f"ls {BUNDLE_PATH}/bin/geniex-bench"],
         text=True,
         errors="replace",
         stdout=subprocess.PIPE,

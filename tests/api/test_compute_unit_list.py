@@ -12,19 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``geniex.get_plugin_list`` shape and contents."""
+"""``geniex.get_compute_unit_list`` shape per runtime."""
 
 from __future__ import annotations
 
 import geniex
 
 
-def test_plugin_list_is_non_empty_string_list(geniex_session):
-    plugins = geniex.get_plugin_list()
-    assert isinstance(plugins, list) and plugins
-    for p in plugins:
-        assert isinstance(p, str) and p
-
-
-def test_plugin_list_contains_llama_cpp(geniex_session):
-    assert 'llama_cpp' in geniex.get_plugin_list()
+def test_compute_unit_list_shape_for_each_runtime(geniex_session):
+    for runtime in geniex.get_runtime_list():
+        compute_units = geniex.get_compute_unit_list(runtime)
+        assert isinstance(compute_units, list)
+        for entry in compute_units:
+            assert isinstance(entry, tuple) and len(entry) == 2
+            compute_unit, label = entry
+            assert isinstance(compute_unit, str) and compute_unit
+            assert isinstance(label, str)

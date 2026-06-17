@@ -32,6 +32,7 @@ import (
 
 	geniex_sdk "github.com/qcom-it-nexa-ai/geniex/bindings/go"
 	"github.com/qcom-it-nexa-ai/geniex/cli/internal/render"
+	"github.com/qcom-it-nexa-ai/geniex/cli/internal/store"
 )
 
 var (
@@ -80,7 +81,7 @@ func pull() *cobra.Command {
 	pullCmd.Flags().StringVarP(&modelType, "model-type", "", "", "specify model type to use: [llm|vlm]")
 
 	pullCmd.RunE = func(cmd *cobra.Command, args []string) error {
-		name, quant := geniex_sdk.SplitNameQuant(args[0])
+		name, quant := geniex_sdk.SplitNamePrecision(args[0])
 		return pullModel(cmd.Context(), name, quant)
 	}
 
@@ -121,7 +122,7 @@ func remove() *cobra.Command {
 
 		var errs []error
 		for _, arg := range args {
-			name, quant := geniex_sdk.SplitNameQuant(arg)
+			name, quant := geniex_sdk.SplitNamePrecision(arg)
 			key := name
 			if quant != "" {
 				key = name + ":" + quant
@@ -205,17 +206,17 @@ func list() *cobra.Command {
 type listedModel struct {
 	Name       string   `json:"name"`
 	Size       int64    `json:"size"`
-	Plugin     string   `json:"plugin"`
+	Runtime    string   `json:"runtime"`
 	Type       string   `json:"type"`
 	Precisions []string `json:"precisions"`
 }
 
 // downloadedPrecisions returns the model's precisions, optionally hiding the
-// QuantNA placeholder used by non-quantized models (table view only).
-func downloadedPrecisions(m geniex_sdk.ModelDetail, hideQuantNA bool) []string {
+// PrecisionNA placeholder used by non-quantized models (table view only).
+func downloadedPrecisions(m geniex_sdk.ModelDetail, hidePrecisionNA bool) []string {
 	quants := make([]string, 0, len(m.Precisions))
 	for _, q := range m.Precisions {
-		if hideQuantNA && q == geniex_sdk.QuantNA {
+		if hidePrecisionNA && q == geniex_sdk.PrecisionNA {
 			continue
 		}
 		quants = append(quants, q)
@@ -229,7 +230,7 @@ func printListTable(models []geniex_sdk.ModelDetail, verbose bool) {
 	tw.SetOutputMirror(os.Stdout)
 	tw.SetStyle(table.StyleLight)
 	if verbose {
-		tw.AppendHeader(table.Row{"NAME", "SIZE", "PLUGIN", "TYPE", "PRECISIONS"})
+		tw.AppendHeader(table.Row{"NAME", "SIZE", "RUNTIME", "TYPE", "PRECISIONS"})
 	} else {
 		tw.AppendHeader(table.Row{"NAME", "SIZE", "PRECISIONS"})
 	}
@@ -242,7 +243,7 @@ func printListTable(models []geniex_sdk.ModelDetail, verbose bool) {
 		}
 		quants := strings.Join(downloadedPrecisions(model, !verbose), ",")
 		if verbose {
-			tw.AppendRow(table.Row{model.Name, size, model.PluginID, model.ModelType, quants})
+			tw.AppendRow(table.Row{model.Name, size, model.RuntimeID, model.ModelType, quants})
 		} else {
 			tw.AppendRow(table.Row{model.Name, size, quants})
 		}
@@ -256,7 +257,7 @@ func toListedModels(models []geniex_sdk.ModelDetail) []listedModel {
 		out = append(out, listedModel{
 			Name:       m.Name,
 			Size:       m.TotalSize,
-			Plugin:     m.PluginID,
+			Runtime:    m.RuntimeID,
 			Type:       m.ModelType.String(),
 			Precisions: downloadedPrecisions(m, false),
 		})
@@ -272,14 +273,14 @@ func printListJSON(models []geniex_sdk.ModelDetail) error {
 
 func printListCSV(models []geniex_sdk.ModelDetail) error {
 	w := csv.NewWriter(os.Stdout)
-	if err := w.Write([]string{"name", "size", "plugin", "type", "precisions"}); err != nil {
+	if err := w.Write([]string{"name", "size", "runtime", "type", "precisions"}); err != nil {
 		return err
 	}
 	for _, m := range toListedModels(models) {
 		row := []string{
 			m.Name,
 			strconv.FormatInt(m.Size, 10),
-			m.Plugin,
+			m.Runtime,
 			m.Type,
 			strings.Join(m.Precisions, ","),
 		}
@@ -318,7 +319,7 @@ func setTypeCmd() *cobra.Command {
 		Args:      cobra.RangeArgs(1, 2),
 		ValidArgs: modelTypeNames,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			name, _ := geniex_sdk.SplitNameQuant(args[0])
+			name, _ := geniex_sdk.SplitNamePrecision(args[0])
 
 			// Verify the model is present before prompting for a type.
 			if _, err := geniex_sdk.ModelGetType(name); err != nil {
@@ -363,10 +364,24 @@ func pullModel(ctx context.Context, name string, quant string) error {
 
 	in := geniex_sdk.ModelPullInput{
 		ModelName:   name,
-		Quant:       quant,
+		Precision:   quant,
 		Hub:         hub,
 		LocalPath:   localPath,
 		DisplayName: "",
+	}
+
+	// Resolve a chipset before the spinner (the picker can't share the terminal
+	// with one): configured value wins, then a host probe, then an interactive
+	// picker. The SDK decides whether the chipset is actually used for this pull.
+	if chipset, _, _ := store.Get().ConfigGet(store.ConfigKeyChipset); chipset != "" {
+		in.Chipset = chipset
+	} else if detected, _ := geniex_sdk.ModelDetectChipset(); detected != "" {
+		in.Chipset = detected
+	} else {
+		fmt.Println(render.GetTheme().Info.Sprint("No chipset configured. Please select your chipset first."))
+		if in.Chipset, err = pickChipset(); err != nil {
+			return err
+		}
 	}
 
 	// Validate --model-type early so we fail before downloading anything, and
@@ -392,7 +407,7 @@ func pullModel(ctx context.Context, name string, quant string) error {
 		if chosen, err := choosePrecision(q.Candidates); err != nil {
 			return err
 		} else {
-			in.Quant = chosen
+			in.Precision = chosen
 			quant = chosen
 		}
 	}
@@ -439,12 +454,12 @@ func pullModel(ctx context.Context, name string, quant string) error {
 // choosePrecision picks a precision from the remote candidates: the only one
 // when there's a single option, otherwise an interactive picker that defaults
 // to the SDK-recommended quant.
-func choosePrecision(candidates []geniex_sdk.QuantCandidate) (string, error) {
+func choosePrecision(candidates []geniex_sdk.PrecisionCandidate) (string, error) {
 	if len(candidates) == 0 {
 		return "", fmt.Errorf("no precision available for this model")
 	}
 	if len(candidates) == 1 {
-		return candidates[0].Quant, nil
+		return candidates[0].Precision, nil
 	}
 
 	var defaultQuant string
@@ -456,12 +471,12 @@ func choosePrecision(candidates []geniex_sdk.QuantCandidate) (string, error) {
 		} else {
 			sz = "—"
 		}
-		label := fmt.Sprintf("%-10s [%7s]", c.Quant, sz)
+		label := fmt.Sprintf("%-10s [%7s]", c.Precision, sz)
 		if c.IsDefault {
 			label += " (default)"
-			defaultQuant = c.Quant
+			defaultQuant = c.Precision
 		}
-		options = append(options, huh.NewOption(label, c.Quant))
+		options = append(options, huh.NewOption(label, c.Precision))
 	}
 
 	chosen := defaultQuant

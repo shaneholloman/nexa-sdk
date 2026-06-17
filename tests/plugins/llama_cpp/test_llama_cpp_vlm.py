@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""llama_cpp VLM matrix: cpu, npu, hybrid."""
+"""llama_cpp VLM matrix: cpu, npu, gpu."""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ def _vlm_prompt(vlm: geniex.GenieXVLM, image_path: str, text: str) -> str:
     )
 
 
-@pytest.mark.parametrize('device_map', ['cpu', 'npu', 'hybrid'])
+@pytest.mark.parametrize('device_map', ['cpu', 'npu', 'gpu'])
 def test_generate_with_image(llama_cpp_vlm_paths, test_image, device_map):
     with geniex.AutoModelForVision2Seq.from_pretrained(
         LLAMA_CPP_VLM_MODEL,
@@ -99,7 +99,7 @@ def test_multi_turn_without_reset(llama_cpp_vlm_paths, test_image):
         assert out2.profile.prompt_tokens > 0
 
 
-@pytest.mark.parametrize('device_map', ['cpu', 'npu', 'hybrid'])
+@pytest.mark.parametrize('device_map', ['cpu', 'npu', 'gpu'])
 def test_quality_keywords(llama_cpp_vlm_paths, quality_image, device_map):
     # Mirrors run_scorecard_posix.py:_section_vlm_quality_checks (test-llama.cpp):
     # any one of the canonical keywords is enough — VLMs vary in vocabulary

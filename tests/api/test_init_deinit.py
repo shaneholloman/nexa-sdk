@@ -44,8 +44,8 @@ def test_public_surface_exports():
         'set_log_level',
         'version',
         'get_plugin_version',
-        'get_plugin_list',
-        'get_device_list',
+        'get_runtime_list',
+        'get_compute_unit_list',
         'resolve_device_map',
         'model_manager',
     }

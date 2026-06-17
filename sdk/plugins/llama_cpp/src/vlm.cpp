@@ -37,10 +37,10 @@ int32_t LlamaVlm::create_impl(const geniex_VlmCreateInput* input) {
     // dance. Any llama.cpp class that might load onto HTP must participate.
     htp::reacquire_before_load();
 
-    const Device             device = classify_device(input->device_id, input->config.n_gpu_layers);
-    const geniex_ModelConfig config = build_model_config(input->config, /*n_ctx_default=*/16384, device);
+    const Device              device = classify_device(input->device_id, input->config.n_gpu_layers);
+    const geniex_ModelConfig& config = input->config;
 
-    llama_model_params mpar      = build_model_params(config);
+    llama_model_params mpar      = build_model_params(config, device);
     auto               selection = resolve_devices(input->device_id);
     if (!selection) {
         return GENIEX_ERROR_COMMON_INVALID_INPUT;
@@ -61,7 +61,7 @@ int32_t LlamaVlm::create_impl(const geniex_VlmCreateInput* input) {
         return GENIEX_ERROR_COMMON_MODEL_LOAD;
     }
 
-    llama_context_params cpar = build_context_params(config, device);
+    llama_context_params cpar = build_context_params(config, /*n_ctx_default=*/16384, device);
 
     this->ctx = llama_init_from_model(this->model, cpar);
     if (!this->ctx) {
@@ -72,7 +72,7 @@ int32_t LlamaVlm::create_impl(const geniex_VlmCreateInput* input) {
 
     ggml_threadpool_params tpp_main  = build_threadpool_params(cpar.n_threads, device);
     ggml_threadpool_params tpp_batch = build_threadpool_params(cpar.n_threads_batch, device);
-    int32_t                tp_ret    = create_and_attach_threadpools(this->pools_, this->ctx, tpp_main, tpp_batch);
+    int32_t                tp_ret    = this->pools_.attach(this->ctx, tpp_main, tpp_batch);
     if (tp_ret != GENIEX_SUCCESS) {
         return tp_ret;
     }
@@ -95,7 +95,7 @@ int32_t LlamaVlm::create_impl(const geniex_VlmCreateInput* input) {
         }
     }
 
-    this->reset_sampler();
+    this->set_sampler(nullptr);
 
     return GENIEX_SUCCESS;
 }
@@ -443,8 +443,6 @@ int32_t LlamaVlm::generate(const geniex_VlmGenerateInput* input, geniex_VlmGener
 }  // namespace geniex
 
 namespace geniex {
-
-void LlamaVlm::reset_sampler() { this->set_sampler(nullptr); }
 
 void LlamaVlm::set_sampler(const geniex_SamplerConfig* cfg) {
     if (this->sampler) {

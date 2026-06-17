@@ -24,9 +24,9 @@ data class ModelConfig(
 
     /**
      * Number of layers to offload to GPU / NPU. The JNI layer overrides
-     * this when [InputPluginBase.device_id] is [DeviceIdValue.CPU] (forces
-     * 0) or [DeviceIdValue.HYBRID] (forces 999). For [DeviceIdValue.GPU]
-     * and [DeviceIdValue.NPU] the caller's value is used as-is; set it
+     * this when [InputPluginBase.compute_unit] is [ComputeUnitValue.CPU] (forces
+     * 0) or [ComputeUnitValue.HYBRID] (forces 999). For [ComputeUnitValue.GPU]
+     * and [ComputeUnitValue.NPU] the caller's value is used as-is; set it
      * to 999 to offload every layer.
      */
     var nGpuLayers: Int = 0,
