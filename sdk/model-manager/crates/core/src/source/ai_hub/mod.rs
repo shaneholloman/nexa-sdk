@@ -199,9 +199,6 @@ impl ModelSource for AiHubSource {
 
         let release_assets_url = &entry.manifest_urls.release_assets;
         if release_assets_url.is_empty() {
-            // No prebuilt QAIRT asset is published for this model on AI Hub
-            // Qualcomm requires users to export themselves due to licensing. 
-            // Point callers at the upstream tutorial so the next step is obvious.
             return Err(Error::Hub(format!(
                 "AI Hub model {:?} does not ship a prebuilt QAIRT asset. \
                  Follow the export guide at \
