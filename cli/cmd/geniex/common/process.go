@@ -252,7 +252,7 @@ func (p *Processor) fsmInit() {
 		{STATE_END, "<|start|>"}:         {STATE_START, nil},
 		{STATE_START, "assistant"}:       {STATE_ASSISTANT, nil},
 
-		// gemma4: <|channel>thought\n...\n<channel|>
+		// gemma4
 		{STATE_ASSISTANT, "<|channel>"}:    {STATE_GEMMA_CHANNEL, nil},
 		{STATE_GEMMA_CHANNEL, "thought"}:   {STATE_GEMMA_CHANNEL_THOUGHT, nil},
 		{STATE_GEMMA_CHANNEL_THOUGHT, "\n"}: {STATE_THINK, thinkStart(true)},
