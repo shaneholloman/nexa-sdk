@@ -35,8 +35,7 @@ jobs:
           git config --global core.fscache true
           git config --global core.preloadindex true
 
-      # Need this repo's composite actions (setup-snapdragon-sdks,
-      # setup-vcvars); llama.cpp itself is cloned separately below.
+      # Needed for the composite actions; llama.cpp is cloned separately.
       - name: Checkout geniex (for composite actions)
         uses: actions/checkout@v6
         with:
@@ -75,7 +74,7 @@ jobs:
           }
           $env:CCACHE_DIR = "${{ github.workspace }}/.ccache"
           Add-Content $env:GITHUB_ENV "CCACHE_DIR=$env:CCACHE_DIR"
-          # Tolerate __DATE__/__TIME__ and mtime jitter in ggml sources.
+          # Tolerate __DATE__/__TIME__ and mtime jitter in ggml/llama sources.
           Add-Content $env:GITHUB_ENV "CCACHE_SLOPPINESS=time_macros,include_file_mtime,include_file_ctime"
           ccache --max-size=5G
 
@@ -86,9 +85,6 @@ jobs:
           key: ccache-llama-windows-arm64-${{ steps.llama.outputs.sha }}
           restore-keys: ccache-llama-windows-arm64-
 
-      # Installs OpenCL + Hexagon SDKs and the WDK, exporting
-      # OPENCL_SDK_ROOT / HEXAGON_SDK_ROOT / HEXAGON_TOOLS_ROOT /
-      # WINDOWS_SDK_BIN — the same env the geniex SDK build consumes.
       - name: Setup Snapdragon SDKs
         uses: ./.github/actions/setup-snapdragon-sdks
 
@@ -118,24 +114,16 @@ jobs:
           $Preset = "arm64-windows-llvm-release"
           $BuildDir = "$env:LLAMA_DIR/build-$Preset"
 
-          # Snapshot SDK paths before the vcvars replay. The vcvars bat is
-          # sourced by running `cmd /c "vcvars && set"` and replaying every
-          # variable back into this process. That cmd.exe child does not
-          # inherit variables written to $GITHUB_ENV by prior steps (those
-          # are injected by the runner only into the PowerShell process), so
-          # the replay loop would silently overwrite them with empty strings.
-          # Capturing them here, before the replay, lets us restore them and
-          # pass them explicitly to cmake — the same pattern the geniex
-          # CMakePresets `snapdragon` block uses via $env{...} expansion.
+          # Snapshot SDK vars before vcvars replay: the cmd.exe child does not
+          # inherit $GITHUB_ENV values, so the replay loop would clobber them.
           $HexagonSdkRoot   = $env:HEXAGON_SDK_ROOT
           $HexagonToolsRoot = $env:HEXAGON_TOOLS_ROOT
           $HexagonHtpCert   = $env:HEXAGON_HTP_CERT
           $OpenclSdkRoot    = $env:OPENCL_SDK_ROOT
           $WindowsSdkBin    = $env:WINDOWS_SDK_BIN
 
-          # Source vcvars into this process so cmake's child processes
-          # (clang, ninja, inf2cat.exe, signtool.exe) inherit the
-          # Windows SDK PATH/INCLUDE/LIB.
+          # Source vcvars so cmake children (clang, ninja, inf2cat, signtool)
+          # inherit the Windows SDK PATH/INCLUDE/LIB.
           $envDump = cmd /c "`"$env:VCVARS_BAT`" $env:VCVARS_ARGS && set"
           foreach ($line in $envDump) {
             if ($line -match "^(.+?)=(.*)$") {
@@ -144,20 +132,15 @@ jobs:
           }
           $env:PATH = "$env:LLVM_BIN;$env:PATH"
 
-          # Restore SDK vars that the vcvars replay may have clobbered.
+          # Restore SDK vars clobbered by the replay.
           $env:HEXAGON_SDK_ROOT   = $HexagonSdkRoot
           $env:HEXAGON_TOOLS_ROOT = $HexagonToolsRoot
           $env:HEXAGON_HTP_CERT   = $HexagonHtpCert
           $env:OPENCL_SDK_ROOT    = $OpenclSdkRoot
           $env:WINDOWS_SDK_BIN    = $WindowsSdkBin
 
-          # Pass SDK paths explicitly on the cmake command line so they are
-          # baked into the cache and immune to any future env mutation.
-          # CMAKE_INSTALL_LIBDIR=bin collapses the install layout into a
-          # single folder: executables, the ggml/llama DLLs, and the
-          # Hexagon HTP skels + signed .cat (installed via `TYPE LIB`) all
-          # land in <prefix>/bin, so the ggml-hexagon DLL finds the skels
-          # beside it and the bundle runs out of the box.
+          # CMAKE_INSTALL_LIBDIR=bin puts skels + .cat alongside the DLLs and
+          # executables in one runnable folder.
           cmake -S $env:LLAMA_DIR --preset $Preset -B $BuildDir --log-level=VERBOSE `
             -DGGML_HEXAGON=ON `
             -DGGML_OPENCL=ON `
@@ -179,11 +162,6 @@ jobs:
         shell: powershell
         run: ccache --show-stats --verbose; $true
 
-      # dist/bin is a self-contained, runnable layout: all executables, the
-      # ggml/llama DLLs, and the Hexagon HTP skels + signed catalog in one
-      # folder. External redistributables (Adreno OpenCL ICD, OpenMP
-      # runtime) are intentionally excluded — install them from the SDK /
-      # VS redist on the target machine.
       - name: Upload llama.cpp build artifact
         uses: actions/upload-artifact@v7
         with:
