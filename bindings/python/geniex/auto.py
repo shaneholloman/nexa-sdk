@@ -176,7 +176,7 @@ def _resolve_model_sources(
         try:
             paths = _mm.ensure_cached(
                 model_name_or_path,
-                quant=quant,
+                precision=quant,
                 hub='auto',
                 hf_token=hf_token,
                 on_progress=printer,

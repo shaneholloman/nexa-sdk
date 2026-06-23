@@ -59,7 +59,8 @@ def test_resolve_model_sources_translates_quant_error(monkeypatch):
     def _fake_get_paths(_key):
         raise GenieXError(-100201, 'Model loading failed')  # cache miss
 
-    def _fake_ensure_cached(*_a, **_kw):
+    def _fake_ensure_cached(*_a, precision=None, **_kw):
+        assert precision == 'BAD_QUANT'
         raise GenieXError(GENIEX_ERROR_COMMON_UNKNOWN, 'Unknown error')
 
     monkeypatch.setattr(auto_module._mm, 'get_paths', _fake_get_paths)
