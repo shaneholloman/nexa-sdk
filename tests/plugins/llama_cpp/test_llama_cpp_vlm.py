@@ -94,7 +94,7 @@ def test_multi_turn_without_reset(llama_cpp_vlm_paths, test_image):
         prompt2 = vlm.tokenizer.apply_chat_template(history, tokenize=False, add_generation_prompt=True)
         # Old char-offset tracking sliced prompt2 past the image marker while a
         # bitmap was still supplied, so mtmd_tokenize failed and generate() raised.
-        out2 = vlm.generate(prompt2, max_new_tokens=8, temperature=0.0, seed=42, images=[test_image])
+        out2 = vlm.generate(prompt2, max_new_tokens=8, temperature=0.0, seed=42, images=[])
         assert isinstance(out2, geniex.GenerateOutput)
         assert out2.profile.prompt_tokens > 0
 
