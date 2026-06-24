@@ -164,7 +164,7 @@ dependencies {
 **Install**
 
 ```bash
-docker pull ghcr.io/qualcomm/geniex-cli:latest
+docker pull docker.io/qualcomm/geniex:latest
 ```
 
 **Run** — the container wraps the CLI, so `geniex infer …` works exactly as above.
