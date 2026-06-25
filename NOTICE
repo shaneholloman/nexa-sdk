@@ -135,7 +135,7 @@ This document provides information about third-party libraries used in the Genie
 - **URL**: https://github.com/nlohmann/json
 - **Description**: JSON for Modern C++
 - **Used in**: llama.cpp
-- **License File**: [geniex-bridge/third-party/llama.cpp/licenses/LICENSE-jsonhpp](https://github.com/ggerganov/llama.cpp/blob/master/licenses/LICENSE-jsonhpp)
+- **License File**: [third-party/llama.cpp/licenses/LICENSE-jsonhpp](https://github.com/ggerganov/llama.cpp/blob/master/licenses/LICENSE-jsonhpp)
 
 ---
 
