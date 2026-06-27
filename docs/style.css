@@ -252,9 +252,13 @@ h3.flex.group.font-semibold {
   min-width: 24px;
   min-height: 24px;
   flex-shrink: 0;
-  background-image: url("/Images/logo.svg");
+  background-image: url("/Mintlify-image/GenieX-Logo-Icon-Black.png");
   background-size: contain;
   background-repeat: no-repeat;
+}
+
+.dark .nav-logo::before {
+  background-image: url("/Mintlify-image/GenieX-Logo-Icon-White.png");
 }
 
 header a[href="/"],
@@ -262,9 +266,9 @@ header a[href="/"] span,
 header a[href="/"] p,
 header [data-component-part="logo"] + *,
 header .nav-logo + * {
-  font-size: 14px !important;
-  font-weight: 500 !important;
-  line-height: 20px !important;
+  font-size: 16px !important;
+  font-weight: 400 !important;
+  line-height: 26px !important;
   letter-spacing: 0 !important;
 }
 
@@ -274,9 +278,9 @@ header :has(.nav-logo) p,
 nav :has(> .nav-logo),
 nav :has(.nav-logo) span,
 nav :has(.nav-logo) p {
-  font-size: 14px !important;
-  font-weight: 500 !important;
-  line-height: 20px !important;
+  font-size: 16px !important;
+  font-weight: 400 !important;
+  line-height: 26px !important;
   letter-spacing: 0 !important;
 }
 
@@ -292,9 +296,9 @@ nav .truncate,
 #navbar .font-semibold,
 #navbar .font-medium,
 #navbar .truncate {
-  font-size: 14px !important;
-  font-weight: 500 !important;
-  line-height: 20px !important;
+  font-size: 16px !important;
+  font-weight: 400 !important;
+  line-height: 26px !important;
   letter-spacing: 0 !important;
 }
 
@@ -306,11 +310,11 @@ nav a:has(img.nav-logo) *,
 #navbar a:has(img.nav-logo) * {
   leading-trim: both;
   text-edge: cap;
-  font-family: var(--type-static-heading-sm-default-font-family, "Roboto Flex") !important;
-  font-size: var(--type-static-heading-sm-default-font-size, 16px) !important;
+  font-family: "Qualcomm Next WEB Regular", "Qualcomm Next WEB", "Roboto Flex", Helvetica, Arial, sans-serif !important;
+  font-size: 16px !important;
   font-style: normal !important;
-  font-weight: 500 !important;
-  line-height: var(--type-static-heading-sm-default-line-height, 26px) !important;
+  font-weight: 400 !important;
+  line-height: 26px !important;
   letter-spacing: 0 !important;
   color: #4a5a75 !important;
 }
