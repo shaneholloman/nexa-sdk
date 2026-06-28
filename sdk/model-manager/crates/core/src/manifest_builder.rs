@@ -678,14 +678,11 @@ mod tests {
     }
 
     #[test]
-    fn gpt_oss_20b_sharded_mxfp4_layout() {
-        // ggml-org/gpt-oss-20b-GGUF: two MXFP4 shards. With MXFP recognised by
-        // extract_quant, hint `MXFP4` picks the first shard as entrypoint and
-        // routes the second shard to extra_files.
-        let (names, sizes) = sizes_of(&[
-            ("gpt-oss-20b-mxfp4-00001-of-00002.gguf", 6_000_000_000),
-            ("gpt-oss-20b-mxfp4-00002-of-00002.gguf", 6_000_000_000),
-        ]);
+    fn gpt_oss_20b_mxfp4_layout() {
+        // ggml-org/gpt-oss-20b-GGUF ships a single 12 GB MXFP4 weight (no
+        // shards). Before MXFP was recognised the file landed in the
+        // `"default"` bucket and `:mxfp4` failed with QuantNotFound.
+        let (names, sizes) = sizes_of(&[("gpt-oss-20b-mxfp4.gguf", 12_109_566_560)]);
         let hint = ManifestHint {
             quant: Some("MXFP4".to_string()),
             ..Default::default()
@@ -693,9 +690,12 @@ mod tests {
         let m =
             infer_manifest_from_names("ggml-org/gpt-oss-20b-GGUF", &names, &sizes, hint).unwrap();
         let entry = m.model_file.get("MXFP4").expect("MXFP4 key present");
-        assert_eq!(entry.name, "gpt-oss-20b-mxfp4-00001-of-00002.gguf");
-        let extra: Vec<&str> = m.extra_files.iter().map(|f| f.name.as_str()).collect();
-        assert!(extra.contains(&"gpt-oss-20b-mxfp4-00002-of-00002.gguf"));
+        assert_eq!(entry.name, "gpt-oss-20b-mxfp4.gguf");
+        assert!(
+            m.extra_files.is_empty(),
+            "single-file repo has no extras: {:?}",
+            m.extra_files
+        );
     }
 
     #[test]
