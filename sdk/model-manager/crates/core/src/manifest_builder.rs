@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! Infer a `ModelManifest` from a directory or a list of files.
 //!
 //! Used when the source (LocalFS or a HuggingFace repo) does not ship a

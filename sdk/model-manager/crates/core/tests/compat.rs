@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! Cross-language manifest compatibility: verify that a `geniex.json`
 //! produced by the Go CLI (which uses `sonic.Marshal` with PascalCase
 //! struct field names) round-trips through the Rust model manager

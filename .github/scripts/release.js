@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
 module.exports = async ({ github, context, core }) => {
   const { VERSION, FILES, HTP_SIGNED, LLAMA_SHA } = process.env;
   const owner = context.repo.owner;

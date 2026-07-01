@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! Integration tests for the download executor against a wiremock'd
 //! HuggingFace-shaped server. Covers: multi-file + multi-chunk
 //! downloads land byte-correct, the `.progress` bitmap gets each bit

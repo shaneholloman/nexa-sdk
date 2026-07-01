@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! Host chipset auto-detection for AI Hub pulls.
 //!
 //! AI Hub packages qairt assets per (chipset, HTP arch) pair — for

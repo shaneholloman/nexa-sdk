@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! Filter `FileSpec`s that still need fetching on a resumed pull.
 //!
 //! The executor does the final chunk-level resume decision from the

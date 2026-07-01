@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! ZIP64-aware central directory parser driven by HTTP Range reads.
 //!
 //! Given a `Url` to a remote zip, [`fetch_central_directory`] returns

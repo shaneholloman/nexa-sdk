@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! Live test against the HuggingFace Hub. Requires network access, so
 //! it is gated behind `--ignored` and only runs when explicitly
 //! requested:

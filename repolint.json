@@ -162,7 +162,8 @@
               "types\/",
               "uthash.h",
               "sdk\/include\/external\/",
-              "third-party\/"
+              "third-party\/",
+              "cli\/server\/docs\/ui\/swagger-.*\\.js"
             ]
           },
           "lineCount": 200,
@@ -205,7 +206,8 @@
               "types\/",
               "uthash.h",
               "sdk\/include\/external\/",
-              "third-party\/"
+              "third-party\/",
+              "cli\/server\/docs\/ui\/swagger-.*\\.js"
             ]
           },
           "lineCount": 200,

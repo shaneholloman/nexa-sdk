@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! Integration tests for [`ReqwestTransport`]: proxy routing, HEAD parsing,
 //! and range GET semantics. Uses `wiremock` to stand up a fake upstream.
 //!

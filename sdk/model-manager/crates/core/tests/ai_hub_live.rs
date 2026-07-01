@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! Live tests against the real Qualcomm AI Hub public bucket. Require
 //! network access (and, for the end-to-end pull, ~2 GB of disk +
 //! patience), so they are gated behind `--ignored` and only run when

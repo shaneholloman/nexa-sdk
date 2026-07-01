@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! Byte-moving executor for [`crate::source::Plan`]s.
 //!
 //! The executor is hub-agnostic: it takes a slice of [`FileSpec`]s and

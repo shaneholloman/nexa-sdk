@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
 /// Resolve a short model alias to its canonical "org/repo" name.
 ///
 /// Currently single-entry — `qwen3` is kept as the canonical example so

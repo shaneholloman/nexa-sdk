@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! Plan-then-fetch contract for a single model pull.
 //!
 //! A [`ModelSource`] fully resolves "what does this model consist of" —

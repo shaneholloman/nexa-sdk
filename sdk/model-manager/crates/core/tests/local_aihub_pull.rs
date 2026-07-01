@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! End-to-end pull from a local AI Hub source.
 //!
 //! Two flows are exercised: pulling from an already-extracted directory

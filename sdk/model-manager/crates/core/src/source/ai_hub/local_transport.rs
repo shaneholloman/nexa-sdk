@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! [`HttpTransport`] adapter backed by a single local file.
 //!
 //! [`fetch_central_directory`](super::remote_zip::fetch_central_directory)

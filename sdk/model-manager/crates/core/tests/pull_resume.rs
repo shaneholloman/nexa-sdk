@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! End-to-end test for `pull()` resume at chunk granularity.
 //!
 //! Walks a real pull through the HfSource → Executor → ReqwestTransport

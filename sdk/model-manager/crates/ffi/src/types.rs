@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
 use std::cell::RefCell;
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};

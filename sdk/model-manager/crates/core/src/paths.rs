@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
 use crate::error::{Error, Result};
 use crate::manifest::{ModelManifest, ModelType};
 use crate::manifest_builder::QUANT_PRIORITY;

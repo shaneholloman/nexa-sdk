@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! End-to-end AI Hub pull against a wiremock'd server.
 //!
 //! Serves three protojson documents (manifest.json, release-assets.json,

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! Ad-hoc timing harness: pull one HF repo and print wall-clock +
 //! throughput. Useful when tuning `GENIEX_DL_*` knobs, sanity-checking
 //! proxy setup, or eyeballing throughput after a transport change.

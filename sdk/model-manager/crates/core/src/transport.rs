@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! HTTP transport layer — the minimum a hub needs from the network.
 //!
 //! `HttpTransport` has two methods: HEAD to discover size +
