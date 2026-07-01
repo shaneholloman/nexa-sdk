@@ -784,10 +784,56 @@ button[data-state="active"] > div.absolute {
 
 .mdx-content button[data-state="active"] > div.absolute {
   display: block !important;
-  height: 4px !important;
-  bottom: -2px !important;
+  height: 1px !important;
+  bottom: 0 !important;
   background-color: #2A2AEA !important;
   z-index: 1 !important;
+}
+
+.mdx-content [role="tablist"] button[role="tab"],
+.mdx-content [role="tablist"] button[role="tab"] *:not(.absolute),
+.mdx-content [role="tablist"] [data-component-part="tab-button"],
+.mdx-content [role="tablist"] [data-component-part="tab-button"] *:not(.absolute) {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.mdx-content [role="tablist"] button[role="tab"]:hover,
+.mdx-content [role="tablist"] button[role="tab"]:hover *:not(.absolute),
+.mdx-content [role="tablist"] button[role="tab"]:focus,
+.mdx-content [role="tablist"] button[role="tab"]:focus *:not(.absolute),
+.mdx-content [role="tablist"] button[role="tab"]:active,
+.mdx-content [role="tablist"] button[role="tab"]:active *:not(.absolute),
+.mdx-content [role="tablist"] [data-component-part="tab-button"]:hover,
+.mdx-content [role="tablist"] [data-component-part="tab-button"]:hover *:not(.absolute),
+.mdx-content [role="tablist"] [data-component-part="tab-button"]:focus,
+.mdx-content [role="tablist"] [data-component-part="tab-button"]:focus *:not(.absolute) {
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  color: inherit !important;
+}
+
+.mdx-content [role="tablist"] button[role="tab"]:not([aria-selected="true"]):not([data-state="active"]):hover,
+.mdx-content [role="tablist"] [data-component-part="tab-button"]:not([data-active="true"]):not([aria-selected="true"]):hover {
+  color: #303031 !important;
+}
+
+.dark .mdx-content [role="tablist"] button[role="tab"]:not([aria-selected="true"]):not([data-state="active"]):hover,
+.dark .mdx-content [role="tablist"] [data-component-part="tab-button"]:not([data-active="true"]):not([aria-selected="true"]):hover {
+  color: #b9b9ba !important;
+}
+
+.mdx-content [role="tablist"] button[role="tab"][aria-selected="true"]:hover,
+.mdx-content [role="tablist"] button[data-state="active"]:hover,
+.mdx-content [role="tablist"] [data-component-part="tab-button"][data-active="true"]:hover {
+  color: var(--color-text-neutral-primary, #0A0A0A) !important;
+}
+
+.dark .mdx-content [role="tablist"] button[role="tab"][aria-selected="true"]:hover,
+.dark .mdx-content [role="tablist"] button[data-state="active"]:hover,
+.dark .mdx-content [role="tablist"] [data-component-part="tab-button"][data-active="true"]:hover {
+  color: #fcfcfc !important;
 }
 
 .mdx-content [data-component-part="tab-button"][data-active="true"],
@@ -800,9 +846,14 @@ button[data-state="active"] > div.absolute {
   font-weight: 500 !important;
   line-height: 150% !important;
   letter-spacing: 0.15px !important;
-  border-bottom-color: #2A2AEA !important;
-  border-bottom-width: 4px !important;
-  border-bottom-style: solid !important;
+  border-bottom-color: transparent !important;
+  box-shadow: inset 0 -1px 0 0 #2A2AEA !important;
+}
+
+.dark .mdx-content [data-component-part="tab-button"][data-active="true"],
+.dark .mdx-content button[role="tab"][aria-selected="true"],
+.dark .mdx-content button[data-state="active"] {
+  box-shadow: inset 0 -1px 0 0 #99b3fd !important;
 }
 
 .dark .mdx-content [data-component-part="tab-button"][data-active="true"],
