@@ -1,10 +1,5 @@
 # Copyright 2024-2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Tests for ``_sdk_fetch.py`` — the install-time SDK fetcher (#554).
 
