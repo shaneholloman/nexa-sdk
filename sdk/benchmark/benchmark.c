@@ -1,8 +1,7 @@
+// Copyright (c) 2024-2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+
 /*
- * Copyright 2024-2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
- *
- * Licensed under the Apache License, Version 2.0 (the "License").
- *
  * geniex-bench — single-cell C inference benchmark, public-API only.
  *
  * Flag naming follows llama.cpp's `llama-bench` (-r / --repetitions,
