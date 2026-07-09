@@ -232,6 +232,13 @@ int32_t QairtLlm::generate(const geniex_LlmGenerateInput* input, geniex_LlmGener
     if (input->config) {
         gen_cfg.max_tokens = input->config->max_tokens > 0 ? input->config->max_tokens : 512;
         qairt::apply_sampler_config(input->config->sampler_config, gen_cfg, bundle_sampler_);
+
+        // Opt-in ring-buffer context eviction. llama_cpp
+        // ignores this field (it always context-shifts).
+        gen_cfg.sliding_window = input->config->sliding_window;
+        if (input->config->sliding_window_n_keep > 0) {
+            gen_cfg.sliding_window_n_keep = input->config->sliding_window_n_keep;
+        }
     }
     gen_cfg.thinking_mode = enable_thinking_;
 

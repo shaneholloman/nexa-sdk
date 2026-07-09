@@ -38,6 +38,7 @@ var (
 	input          string
 	systemPrompt   string
 	computeUnit    string
+	slidingWindow  bool
 
 	// sampler config
 	temperature       float32
@@ -85,6 +86,7 @@ var (
 		llmFlags.StringVarP(&input, "input", "i", "", "prompt txt file")
 		llmFlags.StringArrayVarP(&prompt, "prompt", "p", nil, "pass prompt")
 		llmFlags.StringVarP(&tokenFile, "token-file", "t", "", "path to token file (space-separated token IDs) (llama_cpp only)")
+		llmFlags.BoolVarP(&slidingWindow, "sliding-window", "", false, "evict oldest context on overflow instead of erroring (qairt only)")
 		return llmFlags
 	}()
 	vlmFlags = func() *pflag.FlagSet {
@@ -329,6 +331,7 @@ func inferLLM(paths *geniex_sdk.ModelPaths) error {
 					Config: &geniex_sdk.GenerationConfig{
 						MaxTokens:     maxTokens,
 						SamplerConfig: samplerConfig,
+						SlidingWindow: slidingWindow,
 					},
 				})
 				if err != nil {
@@ -357,6 +360,7 @@ func inferLLM(paths *geniex_sdk.ModelPaths) error {
 						MaxTokens:     maxTokens,
 						Stop:          stopSequences,
 						SamplerConfig: samplerConfig,
+						SlidingWindow: slidingWindow,
 					},
 				})
 
