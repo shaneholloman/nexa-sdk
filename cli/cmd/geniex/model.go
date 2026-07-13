@@ -370,6 +370,14 @@ func pullModel(ctx context.Context, name string, quant string) error {
 	if err != nil {
 		return err
 	}
+	// resolveHub() only sees the --model-hub flag; a prefixed name like
+	// docker.io/... still reads as HubAuto here. Ask the SDK for the hub the
+	// pull will actually use so the skip-precision guard below is correct for
+	// prefix auto-routing too, not just an explicit --model-hub docker.
+	effectiveHub, err := geniex_sdk.ResolveHub(name, hub)
+	if err != nil {
+		return err
+	}
 
 	in := geniex_sdk.ModelPullInput{
 		ModelName:   name,
@@ -408,7 +416,7 @@ func pullModel(ctx context.Context, name string, quant string) error {
 	// Docker Hub, where an empty quant already means "pull the 'latest'
 	// tag" — querying would resolve one tag's manifest and then
 	// mis-feed its GGUF quant label back in as if it were the tag).
-	if quant == "" && hub != geniex_sdk.HubLocalFS && hub != geniex_sdk.HubDocker {
+	if quant == "" && effectiveHub != geniex_sdk.HubLocalFS && effectiveHub != geniex_sdk.HubDocker {
 		spin := render.NewSpinner("fetching available precisions from: " + name)
 		spin.Start()
 		q, err := geniex_sdk.ModelQuery(in)

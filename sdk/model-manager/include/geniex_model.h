@@ -378,6 +378,26 @@ GENIEX_API void geniex_model_query_free(geniex_ModelQueryOutput* out);
  */
 GENIEX_API int32_t geniex_model_resolve_alias(const char* alias, char** out_full_name);
 
+/**
+ * @brief Resolve the hub a pull/query would actually use for @p model_name.
+ *
+ * An explicit @p hub_in other than GENIEX_HUB_AUTO is returned unchanged.
+ * GENIEX_HUB_AUTO resolves to GENIEX_HUB_DOCKER when @p model_name carries a
+ * Docker Hub prefix (`docker.io/`, `index.docker.io/`,
+ * `https://hub.docker.com/r/`, …); otherwise it stays GENIEX_HUB_AUTO.
+ *
+ * Lets a binding branch on the effective hub — e.g. skip the GGUF precision
+ * picker for Docker Hub, whose `:<tag>` is a registry reference, not a quant —
+ * without duplicating the prefix table the SDK owns. No network I/O.
+ *
+ * @param model_name  "org/repo", a short alias, or a prefixed reference.
+ * @param hub_in      The caller's requested hub (GENIEX_HUB_AUTO to auto-detect).
+ * @param out_hub     Set to the effective hub on success.
+ * @return GENIEX_SUCCESS, or GENIEX_ERROR_COMMON_INVALID_INPUT if
+ *         @p model_name or @p out_hub is NULL.
+ */
+GENIEX_API int32_t geniex_model_resolve_hub(const char* model_name, geniex_HubSource hub_in, geniex_HubSource* out_hub);
+
 /* ============================================================
  *  Chipset
  * ============================================================ */

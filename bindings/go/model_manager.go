@@ -88,6 +88,20 @@ const (
 	HubLocalFS     HubSource = C.GENIEX_HUB_LOCALFS
 )
 
+// ResolveHub reports the hub a pull/query will actually use for name given the
+// requested hub. HubAuto resolves to HubDocker when name carries a Docker Hub
+// prefix (docker.io/…); every other input is returned unchanged. The prefix
+// table lives in the SDK, so callers must not re-derive it. No network I/O.
+func ResolveHub(name string, hub HubSource) (HubSource, error) {
+	cName := cStringIfSet(name)
+	defer cFreeIfSet(unsafe.Pointer(cName))
+	var out C.geniex_HubSource
+	if res := C.geniex_model_resolve_hub(cName, C.geniex_HubSource(hub), &out); res != C.GENIEX_SUCCESS {
+		return hub, modelError(res)
+	}
+	return HubSource(out), nil
+}
+
 // FileProgress mirrors geniex_FileProgress.
 type FileProgress struct {
 	FileName        string

@@ -39,6 +39,7 @@ if(WIN32)
         geniex_model_query
         geniex_model_query_free
         geniex_model_resolve_alias
+        geniex_model_resolve_hub
         geniex_model_list_chipsets
         geniex_model_list_chipsets_free
         geniex_model_detect_chipset)

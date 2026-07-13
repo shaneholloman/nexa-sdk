@@ -18,6 +18,7 @@ use crate::types::*;
 /// C-compatible hub source enum. Values MUST match `geniex_HubSource` in
 /// `include/geniex_model.h`.
 #[repr(C)]
+#[derive(Clone, Copy, PartialEq)]
 #[allow(dead_code)]
 pub enum GenieXHubSource {
     Auto = 0,

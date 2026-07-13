@@ -446,6 +446,20 @@ def resolve_alias(alias: str) -> str:
         lib.geniex_free(out)
 
 
+def resolve_effective_hub(model_name: str, hub: str | int = 'auto') -> int:
+    """Return the hub enum a pull/query will actually use for ``model_name``.
+
+    ``"auto"`` resolves to Docker Hub when the name carries a Docker Hub prefix
+    (``docker.io/…``); every other hub is returned unchanged. The prefix table
+    lives in the SDK, so callers must not re-derive it. No network I/O.
+    """
+    _ensure_init()
+    lib = load_library()
+    out = c_int32()
+    _check(lib.geniex_model_resolve_hub(model_name.encode(), _resolve_hub(hub), byref(out)))
+    return out.value
+
+
 def list_chipsets() -> list[ChipsetInfo]:
     """List every chipset Qualcomm AI Hub supports, with aliases.
 
