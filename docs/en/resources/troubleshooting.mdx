@@ -93,6 +93,19 @@ import Feedback from "/snippets/page-feedback.mdx";
   <Accordion title="`--compute hybrid` runs but at CPU speed (silent NPU fallback)">
     If the Hexagon driver can't load (see the entry above), `hybrid` still produces correct output — it just runs entirely on CPU, so the failure is silent. Confirm the NPU is actually engaged by running with `GGML_HEX_VERBOSE=1`; you should see `Hexagon Arch version vNN` and a `libggml-htp-vNN.so` session. No such lines means it fell back to CPU.
   </Accordion>
+
+  <Accordion title="`geniex` exits with 'device is missing CPU features geniex requires'">
+    The aarch64 Linux build is compiled for **armv8.2-a** with the `fp16`, `dotprod`, `lse` (atomics), and `rdm` extensions. Baseline armv8.0 boards — some Dragonwing IoT SoCs with no NPU — don't implement these, so `geniex` stops at startup with a clear error rather than crashing with a raw `SIGILL: illegal instruction` partway through a run.
+
+    This check is global: every backend needs those instructions, so switching `--compute` to `cpu`, `gpu`, or `npu` won't help on such a device. Check what your CPU reports:
+
+    ```bash bash
+    LD_SHOW_AUXV=1 /bin/true | grep AT_HWCAP   # look for atomics, asimdrdm, asimddp, fphp, asimdhp
+    cat /proc/cpuinfo | grep Features          # same features, under the kernel's names
+    ```
+
+    If those features are absent, the device can't run the current build. Report it in [GitHub Issues](https://github.com/qualcomm/GenieX/issues) or Slack with the output above.
+  </Accordion>
 </AccordionGroup>
 
 ## **Android**
